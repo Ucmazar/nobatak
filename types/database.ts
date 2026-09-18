@@ -78,19 +78,20 @@ export interface Appointment {
 
 export interface Database {
   public: {
+    Views: { [_ in never]: never }
+    Functions: { [_ in never]: never }
+    Enums: { [_ in never]: never }
+    CompositeTypes: { [_ in never]: never }
     Tables: {
       profiles: {
-        Row: Profile
-        Insert: Omit<Profile, 'created_at' | 'updated_at'> & {
-          role?: UserRole
-          is_active?: boolean
-          created_at?: string
-          updated_at?: string
-        }
+        Row: { [K in keyof Profile]: Profile[K] }
+        Relationships: []
+        Insert: Pick<Profile, 'id'> & Partial<Omit<Profile, 'id'>>
         Update: Partial<Omit<Profile, 'id'>>
       }
       businesses: {
-        Row: Business
+        Row: { [K in keyof Business]: Business[K] }
+        Relationships: []
         Insert: Omit<Business, 'id' | 'created_at' | 'updated_at'> & {
           id?: string
           created_at?: string
@@ -99,7 +100,8 @@ export interface Database {
         Update: Partial<Omit<Business, 'id' | 'owner_id'>>
       }
       services: {
-        Row: Service
+        Row: { [K in keyof Service]: Service[K] }
+        Relationships: []
         Insert: Omit<Service, 'id' | 'created_at' | 'updated_at'> & {
           id?: string
           is_active?: boolean
@@ -109,7 +111,8 @@ export interface Database {
         Update: Partial<Omit<Service, 'id' | 'business_id'>>
       }
       staff: {
-        Row: Staff
+        Row: { [K in keyof Staff]: Staff[K] }
+        Relationships: []
         Insert: Omit<Staff, 'id' | 'created_at' | 'updated_at'> & {
           id?: string
           is_active?: boolean
@@ -119,7 +122,8 @@ export interface Database {
         Update: Partial<Omit<Staff, 'id' | 'business_id'>>
       }
       appointments: {
-        Row: Appointment
+        Row: { [K in keyof Appointment]: Appointment[K] }
+        Relationships: []
         Insert: Omit<Appointment, 'id' | 'created_at' | 'updated_at' | 'service' | 'staff'> & {
           id?: string
           status?: AppointmentStatus

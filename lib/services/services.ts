@@ -44,7 +44,7 @@ export async function createService(
 
 export async function updateService(
   id: string,
-  serviceData: Partial<Service>
+  serviceData: Partial<Omit<Service, 'id' | 'business_id'>>
 ): Promise<{ service: Service | null; error: string | null }> {
   try {
     const { data, error } = await supabase

@@ -96,7 +96,7 @@ export async function createBusiness(
 
 export async function updateBusiness(
   id: string,
-  bizData: Partial<Business>
+  bizData: Partial<Omit<Business, 'id' | 'owner_id'>>
 ): Promise<{ business: Business | null; error: string | null }> {
   try {
     const { data, error } = await supabase

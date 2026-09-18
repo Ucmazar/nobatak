@@ -44,7 +44,7 @@ export async function createStaff(
 
 export async function updateStaff(
   id: string,
-  staffData: Partial<Staff>
+  staffData: Partial<Omit<Staff, 'id' | 'business_id'>>
 ): Promise<{ staff: Staff | null; error: string | null }> {
   try {
     const { data, error } = await supabase

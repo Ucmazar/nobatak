@@ -44,8 +44,8 @@ export function BusinessQRCode({ name, slug, phone }: { name: string; slug: stri
     const contacts = doc.createElement('div'); contacts.className = 'contacts';
     for (const [label, number] of [['تماس کسب‌وکار', phone]]) {
       if (!number?.trim()) continue;
-      const item = doc.createElement('div'); item.className = 'contact'; item.textContent = label;
-      const value = doc.createElement('span'); value.className = 'phone'; value.textContent = number;
+      const item = doc.createElement('div'); item.className = 'contact'; item.textContent = label ?? null;
+      const value = doc.createElement('span'); value.className = 'phone'; value.textContent = number ?? null;
       item.append(value); contacts.append(item);
     }
     doc.body.append(logo, site, heading, qr, instruction, link);
