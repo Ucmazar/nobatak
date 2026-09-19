@@ -63,6 +63,7 @@ export async function createAppointment(
       .single();
 
     if (error) {
+      if (error.message.includes('DAILY_CAPACITY_REACHED')) return { appointment: null, error: 'DAILY_CAPACITY_REACHED' };
       return { appointment: null, error: error.message };
     }
     return { appointment: data as unknown as Appointment, error: null };

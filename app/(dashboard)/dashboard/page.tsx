@@ -81,6 +81,7 @@ export default function DashboardPage() {
 
   // Appointments State & Modals
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [staffFilter, setStaffFilter] = useState('all');
   const [appointmentFilter, setAppointmentFilter] = useState<'all' | 'waiting' | 'serving' | 'completed' | 'cancelled'>('all');
   const [isAddAppointmentModalOpen, setIsAddAppointmentModalOpen] = useState(false);
   const [custName, setCustName] = useState('');
@@ -256,6 +257,7 @@ export default function DashboardPage() {
 
   // Handle selecting another business
   const handleSelectBusiness = async (biz: Business) => {
+    setStaffFilter('all');
     setSelectedBusiness(biz);
     selectedBusinessRef.current = biz;
     if (biz.is_active !== false) await loadBusinessDetails(biz.id, selectedDateRef.current);
@@ -356,7 +358,7 @@ export default function DashboardPage() {
     });
 
     if (error || !updated) {
-      setAlertMsg({ type: 'error', text: `خطا در به‌روزرسانی تنظیمات: لطفاً دوباره تلاش کنید.` });
+      setAlertMsg({ type: 'error', text: error === 'تنظیم ظرفیت هنوز در پایگاه داده تکمیل نشده است.' ? error : 'ذخیرهٔ تنظیمات انجام نشد. دوباره تلاش کنید.' });
     } else {
       setBusinesses(businesses.map(b => b.id === updated.id ? updated : b));
       setSelectedBusiness(updated);
@@ -614,7 +616,8 @@ export default function DashboardPage() {
   const avgDuration = services.length > 0 ? services[0].duration_minutes : 20;
   const estWaitNewJoiner = waitingAppointments.length * avgDuration;
 
-  const filteredAppointments = dateAppointments.filter(a => {
+  const staffAppointments = dateAppointments.filter(a => staffFilter === 'all' || (staffFilter === 'unassigned' ? !a.staff_id : a.staff_id === staffFilter));
+  const filteredAppointments = staffAppointments.filter(a => {
     if (appointmentFilter === 'all') return true;
     return a.status === appointmentFilter;
   });
@@ -954,13 +957,22 @@ export default function DashboardPage() {
                   </Button>
                 </div>
 
+                <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+                  <label htmlFor="appointment-staff-filter" className="block text-sm font-bold text-slate-800">نوبت‌ها بر اساس کارمند / داکتر</label>
+                  <select id="appointment-staff-filter" value={staffFilter} onChange={e => setStaffFilter(e.target.value)} className="w-full sm:w-auto rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm">
+                    <option value="all">همهٔ کارمندان ({dateAppointments.length})</option>
+                    {staffMembers.map(person => <option key={person.id} value={person.id}>{person.name} ({dateAppointments.filter(a => a.staff_id === person.id).length})</option>)}
+                    <option value="unassigned">بدون انتخاب کارمند ({dateAppointments.filter(a => !a.staff_id).length})</option>
+                  </select>
+                  <p className="text-xs text-slate-500">این انتخاب در روز {isoToAfghaniDate(selectedDate)}: {staffAppointments.length} نوبت؛ {staffAppointments.filter(a => a.status === 'waiting').length} در انتظار؛ {staffAppointments.filter(a => a.status === 'serving').length} در حال خدمت</p>
+                </div>
                 {/* Appointments List */}
                 {filteredAppointments.length === 0 ? (
                   <Card className="text-center py-12 border-dashed border-2">
                     <div className="w-14 h-14 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-3 text-xl">
                       📋
                     </div>
-                    <CardTitle className="text-base">هیچ نوبتی برای تاریخ {isoToAfghaniDate(selectedDate)} ثبت نشده است</CardTitle>
+                    <CardTitle className="text-base">نوبتی مطابق این فیلترها در تاریخ {isoToAfghaniDate(selectedDate)} وجود ندارد</CardTitle>
                     <CardDescription className="text-xs mt-1">
                       نوبت‌های حضوری و آنلاین پس از ثبت، اینجا نمایش داده می‌شوند.
                     </CardDescription>
@@ -1170,12 +1182,6 @@ export default function DashboardPage() {
                     </div>
 
                     <Input
-                      label="لوگو یا ایموجی"
-                      value={selectedBusiness.logo_url || ''}
-                      onChange={(e) => setSelectedBusiness({ ...selectedBusiness, logo_url: e.target.value })}
-                    />
-
-                    <Input
                       label="شماره تماس"
                       value={selectedBusiness.phone || ''}
                       onChange={(e) => setSelectedBusiness({ ...selectedBusiness, phone: e.target.value })}
@@ -1192,6 +1198,8 @@ export default function DashboardPage() {
                       label="سقف پذیرش نوبت‌های روزانه (حداکثر پذیرش در یک روز)"
                       type="number"
                       min="0"
+                      max="2147483647"
+                      step="1"
                       value={selectedBusiness.max_daily_appointments ?? 20}
                       onChange={(e) => setSelectedBusiness({ ...selectedBusiness, max_daily_appointments: parseInt(e.target.value) || 0 })}
                       helperText="تعداد حداکثر نوبت‌هایی که مشتریان می‌توانند در یک روز ثبت کنند. (عدد ۰ به معنی بدون محدودیت است)"

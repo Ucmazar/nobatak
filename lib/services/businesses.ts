@@ -107,21 +107,7 @@ export async function updateBusiness(
       .single();
 
     if (error) {
-      if (error.message.includes('max_daily_appointments') || error.message.includes('schema cache')) {
-        const payload = { ...bizData };
-        delete payload.max_daily_appointments;
-        const { data: retryData, error: retryError } = await supabase
-          .from('businesses')
-          .update(payload)
-          .eq('id', id)
-          .select()
-          .single();
-
-        if (!retryError && retryData) {
-          return { business: retryData, error: null };
-        }
-        return { business: null, error: retryError?.message || error.message };
-      }
+      if (error.message.includes('max_daily_appointments')) return { business: null, error: 'تنظیم ظرفیت هنوز در پایگاه داده تکمیل نشده است.' };
       return { business: null, error: error.message };
     }
     return { business: data, error: null };

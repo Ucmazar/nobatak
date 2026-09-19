@@ -12,8 +12,9 @@ export function businessPublicURL(origin: string, slug: string, configured?: str
     try {
       const candidate = new URL(configured);
       if (['https:', 'http:'].includes(candidate.protocol) && !isLocalHost(candidate.hostname)) base = candidate;
-    } catch { /* Keep the working local origin for previews. */ }
+    } catch { /* Invalid configuration must never produce a local QR code. */ }
   }
+  if (isLocalHost(base.hostname) || !['https:', 'http:'].includes(base.protocol)) throw new Error('PUBLIC_SITE_URL_REQUIRED');
   return new URL('/q/' + encodeURIComponent(slug), base.origin).href;
 }
 

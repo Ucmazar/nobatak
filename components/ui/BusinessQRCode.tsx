@@ -10,11 +10,13 @@ export function BusinessQRCode({ name, slug, phone }: { name: string; slug: stri
   const image = current ? result.image : '';
   useEffect(() => {
     let cancelled = false;
-    const target = businessPublicURL(window.location.origin, slug, process.env.NEXT_PUBLIC_SITE_URL);
-    makeBusinessPoster(name, target, phone).then(image => {
+    Promise.resolve().then(() => {
+      const target = businessPublicURL(window.location.origin, slug, process.env.NEXT_PUBLIC_SITE_URL);
+      return makeBusinessPoster(name, target, phone);
+    }).then(image => {
       if (!cancelled) setResult({ signature, image, error: '' });
-    }).catch(() => {
-      if (!cancelled) setResult({ signature, image: '', error: 'ساخت برگه انجام نشد. صفحه را دوباره باز کنید.' });
+    }).catch((error: unknown) => {
+      if (!cancelled) setResult({ signature, image: '', error: error instanceof Error && error.message === 'PUBLIC_SITE_URL_REQUIRED' ? 'آدرس آنلاین کسب‌وکار هنوز تنظیم نشده است.' : 'ساخت برگه انجام نشد. صفحه را دوباره باز کنید.' });
     });
     return () => { cancelled = true; };
   }, [name, slug, phone, signature]);

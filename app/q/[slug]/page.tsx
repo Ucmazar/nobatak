@@ -7,7 +7,9 @@ import { Business, Service, Staff, Appointment } from '@/types/database';
 import { getBusinessBySlug } from '@/lib/services/businesses';
 import { getBusinessServices } from '@/lib/services/services';
 import { getBusinessStaff } from '@/lib/services/staff';
-import { getBusinessAppointments, createAppointment, deleteAppointment } from '@/lib/services/appointments';
+import { getBusinessAppointments } from '@/lib/services/appointments';
+import { createPublicAppointment as createAppointment, cancelPublicAppointment as deleteAppointment } from '@/lib/services/public-booking';
+import { TelegramButton } from '@/components/ui/TelegramButton';
 import { downloadTicketImage } from '@/lib/ticketImage';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -113,33 +115,32 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
 
         // Restore user's saved appointments from localStorage
         const storageKey = `nobatak_user_apps_${bizData.id}`;
-        const localData = localStorage.getItem(storageKey);
-        if (localData) {
-          try {
-            const parsed: Appointment[] = JSON.parse(localData);
-            const validActive = parsed
-              .filter(localApp => {
-                const live = appData.find(a => a.id === localApp.id);
-                return live && (live.status === 'waiting' || live.status === 'serving');
-              })
-              .map(localApp => {
-                const live = appData.find(a => a.id === localApp.id)!;
-                return { ...localApp, status: live.status, queue_number: live.queue_number };
-              });
-            setMyAppointments(validActive);
-            localStorage.setItem(storageKey, JSON.stringify(validActive));
-            if (validActive.length > 0) {
-              setActiveTicketId(validActive[validActive.length - 1].id);
-              setShowBookingForm(false);
-            } else {
-              setShowBookingForm(true);
-            }
-          } catch {
-            setShowBookingForm(true);
-          }
-        } else {
-          setShowBookingForm(true);
+        let saved: Appointment[] = [];
+        try { saved = JSON.parse(localStorage.getItem(storageKey) || '[]'); if (!Array.isArray(saved)) saved = []; } catch { saved = []; }
+        const incoming = new URLSearchParams(window.location.hash.slice(1)).get('ticket');
+        let linked: Appointment | null = null;
+        if (incoming) {
+          const response = await fetch('/api/telegram/ticket', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: incoming }) });
+          const result = await response.json();
+          if (response.ok && result.appointment?.business_id === bizData.id) {
+            linked = result.appointment;
+            localStorage.setItem('nobatak_ticket_' + linked!.id, incoming);
+            saved = [...saved.filter(item => item.id !== linked!.id), linked!];
+            history.replaceState(null, '', window.location.pathname + window.location.search);
+          } else setActionAlert({ type: 'error', text: 'لینک نوبت معتبر نیست یا نوبت دیگر موجود نیست.' });
         }
+        const dates = [...new Set(saved.map(item => item.appointment_date).filter(date => date && date !== todayStr))];
+        const otherDays = await Promise.all(dates.map(date => getBusinessAppointments(bizData.id, date)));
+        const liveRows = [...appData, ...otherDays.flat()];
+        const valid = saved.flatMap(item => { const live = liveRows.find(row => row.id === item.id); return live && ['waiting','serving'].includes(live.status) ? [live] : []; });
+        setMyAppointments(valid); localStorage.setItem(storageKey, JSON.stringify(valid));
+        const active = linked && valid.find(item => item.id === linked!.id) || valid[valid.length - 1];
+        if (active) {
+          setActiveTicketId(active.id); setShowBookingForm(false);
+          setSelectedDate(active.appointment_date); selectedDateRef.current = active.appointment_date;
+          setAppointments(liveRows.filter(item => item.appointment_date === active.appointment_date));
+        } else setShowBookingForm(true);
+
       } catch (err) {
         console.error('Error loading public page:', err);
         setBusiness(null);
@@ -236,7 +237,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
     setSubmitting(true);
     setFormError(null);
 
-    const maxCapacity = business.max_daily_appointments ?? 0;
+    const maxCapacity = business.max_daily_appointments ?? 20;
     if (maxCapacity > 0 && dateAppointments.length >= maxCapacity) {
       setFormError(`⚠️ تکمیل ظرفیت: سقف نوبت‌دهی کسب‌وکار برای تاریخ ${isoToAfghaniDate(selectedDate)} (${maxCapacity} نوبت) تکمیل گردیده است.`);
       setSubmitting(false);
@@ -261,7 +262,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
     });
 
     if (error || !newApp) {
-      setFormError(`ثبت نوبت انجام نشد: لطفاً دوباره تلاش کنید.`);
+      setFormError(error === 'DAILY_CAPACITY_REACHED' ? 'ظرفیت این روز تکمیل شده است. لطفاً روز دیگری را انتخاب کنید.' : 'ثبت نوبت انجام نشد. لطفاً دوباره تلاش کنید.');
     } else {
       saveAppointmentToLocalStorage(business.id, newApp);
       // Optimistic update — Real-Time will also fire but we update instantly
@@ -269,7 +270,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
       setShowBookingForm(false);
       setCustomerName('');
       setCustomerPhone('');
-      setActionAlert({ type: 'success', text: `نوبت شماره #${newQueueNum} برای ${isoToAfghaniDate(selectedDate)} با موفقیت ثبت شد.` });
+      setActionAlert({ type: 'success', text: `نوبت شماره #${newApp.queue_number} برای ${isoToAfghaniDate(selectedDate)} با موفقیت ثبت شد.` });
     }
 
     setSubmitting(false);
@@ -337,7 +338,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
   }
 
   const selectedDayInfo = upcomingDays.find(d => d.isoDate === selectedDate);
-  const maxCapacity = business.max_daily_appointments ?? 0;
+  const maxCapacity = business.max_daily_appointments ?? 20;
   const capacityFull = maxCapacity > 0 && dateAppointments.length >= maxCapacity;
 
   return (
@@ -384,10 +385,12 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
               )}
             </div>
           </div>
-          {(business.address || business.phone) && (
+          {(
             <div className="pt-3 border-t border-white/10 flex flex-wrap gap-4 text-xs text-blue-100">
               {business.address && <span>📍 {business.address}</span>}
               {business.phone && <span className="dir-ltr text-right font-mono">📞 {business.phone}</span>}
+              <span>ظرفیت روز {isoToAfghaniDate(selectedDate)}: {maxCapacity === 0 ? 'بدون محدودیت' : maxCapacity.toLocaleString('fa-AF') + ' نوبت'}</span>
+              {maxCapacity > 0 && <span role="status">{capacityFull ? 'ظرفیت این روز تکمیل شده؛ روز دیگری انتخاب کنید.' : Math.max(0, maxCapacity - dateAppointments.length).toLocaleString('fa-AF') + ' نوبت باقی مانده'}</span>}
             </div>
           )}
         </div>
@@ -535,6 +538,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
                 >
                   📸 دانلود رسید به صورت عکس (تصویر)
                 </Button>
+                <TelegramButton key={selectedAppointment.id} appointmentId={selectedAppointment.id} />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Button variant="outline" onClick={() => { setFormError(null); setShowBookingForm(true); }} className="text-xs font-bold py-2.5">
                     + ثبت نوبت جدید (برای روز دیگر یا دیگری)
