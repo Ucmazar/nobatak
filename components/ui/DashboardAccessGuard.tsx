@@ -47,7 +47,7 @@ export function DashboardAccessGuard({ children }: { children: ReactNode }) {
   }, []);
   if (access !== 'allowed') return <main dir="rtl" className="min-h-screen grid place-content-center gap-4 text-center p-6">
     <p role="alert">{access === 'unavailable' ? 'بررسی دسترسی ممکن نشد. تا برقراری اتصال، داشبورد بسته است.' : 'در حال بررسی دسترسی…'}</p>
-    <AdminLogoutButton />
+    {access === 'unavailable' && <AdminLogoutButton />}
   </main>;
   return children;
 }

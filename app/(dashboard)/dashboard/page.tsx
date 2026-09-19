@@ -36,6 +36,7 @@ export default function DashboardPage() {
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [dataError, setDataError] = useState<string | null>(null);
 
   // Business State
   const [businesses, setBusinesses] = useState<Business[]>([]);
@@ -110,9 +111,9 @@ export default function DashboardPage() {
       if (selectedBusinessRef.current?.id !== businessId || selectedBusinessRef.current?.is_active === false) return;
       setServices(srvData);
       setStaffMembers(stData);
-      if (selectedDateRef.current === date) setAppointments(appData);
+      if (selectedDateRef.current === date) { setAppointments(appData); setDataError(null); }
     } catch (err) {
-      console.error('Error loading business details:', err);
+      if (selectedBusinessRef.current?.id === businessId && selectedDateRef.current === date) setDataError(err instanceof Error ? err.message : 'دریافت اطلاعات ممکن نشد. لطفاً دوباره تلاش کنید.');
     }
   }, []);
 
@@ -121,9 +122,9 @@ export default function DashboardPage() {
     if (!isValidUUID(businessId)) return;
     try {
       const appData = await getBusinessAppointments(businessId, date, true);
-      if (selectedBusinessRef.current?.id === businessId && selectedBusinessRef.current?.is_active !== false && selectedDateRef.current === date) setAppointments(appData);
+      if (selectedBusinessRef.current?.id === businessId && selectedBusinessRef.current?.is_active !== false && selectedDateRef.current === date) { setAppointments(appData); setDataError(null); }
     } catch (err) {
-      console.error('Error loading appointments:', err);
+      if (selectedBusinessRef.current?.id === businessId && selectedDateRef.current === date) setDataError(err instanceof Error ? err.message : 'دریافت نوبت‌ها ممکن نشد. اتصال اینترنت را بررسی کنید.');
     }
   }, []);
 
@@ -626,7 +627,7 @@ export default function DashboardPage() {
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
           </svg>
-          در حال بارگذاری اطلاعات به صورت Real-Time...
+          در حال آماده‌سازی داشبورد…
         </div>
       </div>
     );
@@ -644,7 +645,7 @@ export default function DashboardPage() {
 
             {/* <span className="flex items-center gap-1.5 text-xs text-emerald-600 font-bold bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg hidden sm:inline-flex">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
-              Real-Time متصل
+              به‌روز
             </span> */}
           </div>
 
@@ -689,6 +690,7 @@ export default function DashboardPage() {
         کسب‌وکارهای شما: {businesses.length} / {businessLimit === null ? 'نامحدود' : businessLimit}
         {!canCreateBusiness && <span className="mr-2 text-amber-700">برای ایجاد کسب‌وکار جدید، از مدیر بخواهید سقف شما را افزایش دهد.</span>}
       </div>
+      {dataError && <div role="alert" className="mx-auto w-full max-w-7xl px-4 pt-4"><div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">{dataError}<button type="button" className="mr-3 font-bold underline" onClick={() => { if (selectedBusiness) void loadBusinessDetails(selectedBusiness.id, selectedDate); }}>تلاش دوباره</button></div></div>}
       {/* Global Notification Toast */}
       {alertMsg && (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">

@@ -13,7 +13,11 @@ export async function getBusinessAppointments(businessId: string, date?: string,
     if (error) throw error;
     return (data ?? []) as unknown as Appointment[];
   } catch (err) {
-    if (throwOnError) throw err;
+    if (throwOnError) {
+      const issue = err as { code?: string; message?: string };
+      const missingDate = ['42703', 'PGRST204'].includes(issue.code ?? '') && issue.message?.includes('appointment_date');
+      throw new Error(missingDate ? 'تنظیم تاریخ نوبت‌ها هنوز تکمیل نشده است. لطفاً با پشتیبانی تماس بگیرید.' : 'دریافت نوبت‌ها ممکن نشد. اتصال اینترنت را بررسی کرده و دوباره تلاش کنید.');
+    }
     console.error('Error fetching appointments:', err);
     return [];
   }
