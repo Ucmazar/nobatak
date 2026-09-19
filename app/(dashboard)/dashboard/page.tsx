@@ -105,11 +105,12 @@ export default function DashboardPage() {
       const [srvData, stData, appData] = await Promise.all([
         getBusinessServices(businessId),
         getBusinessStaff(businessId),
-        getBusinessAppointments(businessId, date),
+        getBusinessAppointments(businessId, date, true),
       ]);
+      if (selectedBusinessRef.current?.id !== businessId || selectedBusinessRef.current?.is_active === false) return;
       setServices(srvData);
       setStaffMembers(stData);
-      setAppointments(appData);
+      if (selectedDateRef.current === date) setAppointments(appData);
     } catch (err) {
       console.error('Error loading business details:', err);
     }
@@ -119,8 +120,8 @@ export default function DashboardPage() {
   const loadAppointmentsOnly = useCallback(async (businessId: string, date: string) => {
     if (!isValidUUID(businessId)) return;
     try {
-      const appData = await getBusinessAppointments(businessId, date);
-      setAppointments(appData);
+      const appData = await getBusinessAppointments(businessId, date, true);
+      if (selectedBusinessRef.current?.id === businessId && selectedBusinessRef.current?.is_active !== false && selectedDateRef.current === date) setAppointments(appData);
     } catch (err) {
       console.error('Error loading appointments:', err);
     }
@@ -210,38 +211,47 @@ export default function DashboardPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]); // selectedDate intentionally excluded — date changes handled by handleDateChange
 
-  // ─── Real-Time Subscription (Instant Updates without Polling) ──────────────
+  // Realtime gives immediate updates; polling recovers missed events and disconnected sockets.
+  const watchedBusinessId = selectedBusiness?.id;
+  const watchedBusinessActive = selectedBusiness?.is_active !== false;
   useEffect(() => {
-    if (!selectedBusiness) return;
-
-    // --- Supabase Realtime (instant updates on DB changes) ---
-    const channel = supabase
-      .channel(`dashboard:rt:${selectedBusiness.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'appointments',
-        },
-        async (payload: any) => {
-          const biz = selectedBusinessRef.current;
-          const date = selectedDateRef.current;
-          // Only refresh if the changed row belongs to this business
-          const rowBizId =
-            payload?.new?.business_id ||
-            payload?.old?.business_id;
-          if (biz && (!rowBizId || rowBizId === biz.id)) {
-            await loadAppointmentsOnly(biz.id, date);
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
+    if (!watchedBusinessId || !watchedBusinessActive) return;
+    let disposed = false;
+    let running = false;
+    let pending = false;
+    const refresh = async () => {
+      if (disposed || document.visibilityState === 'hidden') return;
+      if (running) { pending = true; return; }
+      running = true;
+      try {
+        do {
+          pending = false;
+          await loadAppointmentsOnly(watchedBusinessId, selectedDateRef.current);
+        } while (pending && !disposed);
+      } finally { running = false; }
     };
-  }, [selectedBusiness, loadAppointmentsOnly]);
+    const channel = supabase.channel('dashboard:rt:' + watchedBusinessId)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments' }, payload => {
+        const row = payload.new as Partial<Appointment>;
+        // DELETE events may not contain business_id, so refresh the selected business.
+        if (!row.business_id || row.business_id === watchedBusinessId) void refresh();
+      })
+      .subscribe(status => { if (status === 'SUBSCRIBED') void refresh(); });
+    const timer = window.setInterval(() => { void refresh(); }, 3000);
+    const resume = () => { void refresh(); };
+    window.addEventListener('focus', resume);
+    window.addEventListener('online', resume);
+    document.addEventListener('visibilitychange', resume);
+    void refresh();
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+      window.removeEventListener('focus', resume);
+      window.removeEventListener('online', resume);
+      document.removeEventListener('visibilitychange', resume);
+      void supabase.removeChannel(channel);
+    };
+  }, [watchedBusinessId, watchedBusinessActive, loadAppointmentsOnly]);
 
   // Handle selecting another business
   const handleSelectBusiness = async (biz: Business) => {
@@ -253,6 +263,7 @@ export default function DashboardPage() {
   // Handle date tab click — lightweight: only reload appointments, NO full re-init
   const handleDateChange = async (newDate: string) => {
     if (newDate === selectedDate) return;
+    setAppointments([]);
     setSelectedDate(newDate);
     selectedDateRef.current = newDate;
     if (selectedBusiness) {
@@ -307,6 +318,7 @@ export default function DashboardPage() {
     }
 
     setBusinesses([newBiz, ...businesses]);
+    selectedBusinessRef.current = newBiz;
     setSelectedBusiness(newBiz);
     await loadBusinessDetails(newBiz.id, selectedDate);
 
@@ -363,6 +375,7 @@ export default function DashboardPage() {
       const remaining = businesses.filter(b => b.id !== selectedBusiness.id);
       setBusinesses(remaining);
       if (remaining.length > 0) {
+        selectedBusinessRef.current = remaining[0];
         setSelectedBusiness(remaining[0]);
         loadBusinessDetails(remaining[0].id, selectedDate);
       } else {
@@ -593,7 +606,7 @@ export default function DashboardPage() {
   const displayName = profile?.full_name || user?.user_metadata?.full_name || user?.email || 'کاربر گرامی';
 
   // Queue Calculations for selected date
-  const dateAppointments = appointments.filter(a => (a.appointment_date || todayStr) === selectedDate);
+  const dateAppointments = appointments.filter(a => a.appointment_date === selectedDate);
   const currentServingApp = dateAppointments.find(a => a.status === 'serving');
   const waitingAppointments = dateAppointments.filter(a => a.status === 'waiting');
   const completedAppointments = dateAppointments.filter(a => a.status === 'completed');

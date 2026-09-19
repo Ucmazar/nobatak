@@ -188,7 +188,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
   };
 
   // ─── Queue Metrics ────────────────────────────────────────────────────────
-  const dateAppointments = appointments.filter(a => (a.appointment_date || todayStr) === selectedDate);
+  const dateAppointments = appointments.filter(a => a.appointment_date === selectedDate);
   const servingAppointment = dateAppointments.find(a => a.status === 'serving');
   const waitingAppointments = dateAppointments.filter(a => a.status === 'waiting');
   const selectedService = services.find(s => s.id === selectedServiceId) || services[0] || null;

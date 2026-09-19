@@ -1,32 +1,19 @@
 import { supabase } from '@/lib/supabase/client';
 import { Appointment, AppointmentStatus } from '@/types/database';
+import { getKabulTodayISO } from '@/lib/afghaniMonths';
 import { isValidUUID } from '@/lib/utils';
 
-export async function getBusinessAppointments(businessId: string, date?: string): Promise<Appointment[]> {
+export async function getBusinessAppointments(businessId: string, date?: string, throwOnError = false): Promise<Appointment[]> {
   try {
-    if (date) {
-      const { data: dateData, error: dateError } = await supabase
-        .from('appointments')
-        .select('*, service:services(*), staff:staff(*)')
-        .eq('business_id', businessId)
-        .eq('appointment_date', date)
-        .order('created_at', { ascending: true });
-
-      if (!dateError && dateData) {
-        return dateData as unknown as Appointment[];
-      }
-    }
-
-    // Fallback: fetch all appointments for business if appointment_date column isn't in schema cache yet
-    const { data, error } = await supabase
-      .from('appointments')
+    let query = supabase.from('appointments')
       .select('*, service:services(*), staff:staff(*)')
-      .eq('business_id', businessId)
-      .order('created_at', { ascending: true });
-
-    if (error || !data) return [];
-    return data as unknown as Appointment[];
+      .eq('business_id', businessId);
+    if (date) query = query.eq('appointment_date', date);
+    const { data, error } = await query.order('created_at', { ascending: true });
+    if (error) throw error;
+    return (data ?? []) as unknown as Appointment[];
   } catch (err) {
+    if (throwOnError) throw err;
     console.error('Error fetching appointments:', err);
     return [];
   }
@@ -46,7 +33,7 @@ export async function createAppointment(
   }
 ): Promise<{ appointment: Appointment | null; error: string | null }> {
   try {
-    const targetDate = appointmentData.appointment_date || new Date().toISOString().split('T')[0];
+    const targetDate = appointmentData.appointment_date || getKabulTodayISO();
 
     const payload: any = {
       business_id: appointmentData.business_id,
@@ -72,21 +59,6 @@ export async function createAppointment(
       .single();
 
     if (error) {
-      // If remote Supabase schema cache doesn't have 'appointment_date' column yet,
-      // fallback to inserting without 'appointment_date' in payload so creation NEVER fails!
-      if (error.message.includes('appointment_date') || error.message.includes('schema cache')) {
-        delete payload.appointment_date;
-        const { data: retryData, error: retryError } = await supabase
-          .from('appointments')
-          .insert(payload)
-          .select('*, service:services(*), staff:staff(*)')
-          .single();
-
-        if (!retryError && retryData) {
-          return { appointment: retryData as unknown as Appointment, error: null };
-        }
-        return { appointment: null, error: retryError?.message || error.message };
-      }
       return { appointment: null, error: error.message };
     }
     return { appointment: data as unknown as Appointment, error: null };
