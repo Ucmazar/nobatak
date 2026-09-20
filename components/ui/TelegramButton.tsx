@@ -1,16 +1,28 @@
 'use client';
 import { useEffect, useState } from 'react';
 export function TelegramButton({ appointmentId }: { appointmentId: string }) {
-  const [link, setLink] = useState('');
+  const [state, setState] = useState({ id: '', link: '', message: 'در حال بررسی امکان اطلاع‌رسانی…' });
   useEffect(() => {
     let disposed = false;
     Promise.resolve().then(async () => {
-      const response = await fetch('/api/telegram/config'); const config = await response.json();
-      const token = localStorage.getItem('nobatak_ticket_' + appointmentId);
-      if (!disposed) setLink(config.enabled && token ? 'https://t.me/nobatech_bot?start=' + encodeURIComponent(token) : '');
-    }).catch(() => { if (!disposed) setLink(''); });
+      const response = await fetch('/api/telegram/config', { cache: 'no-store' });
+      if (!response.ok) throw new Error('Unavailable');
+      const config = await response.json();
+      let token: string | null = null;
+      try { token = localStorage.getItem('nobatak_ticket_' + appointmentId); } catch { /* Browser storage unavailable. */ }
+      if (!disposed) setState({ id: appointmentId,
+        link: config.enabled && token ? 'https://t.me/nobatech_bot?start=' + encodeURIComponent(token) : '',
+        message: !config.enabled ? 'اطلاع‌رسانی تلگرام هنوز فعال نشده است.' : !token ? 'این رسید لینک اتصال تلگرام ندارد؛ اطلاع‌رسانی برای نوبت‌های جدید پس از فعال‌سازی در دسترس است.' : '',
+      });
+    }).catch(() => { if (!disposed) setState({ id: appointmentId, link: '', message: 'بررسی اتصال تلگرام ممکن نشد. کمی بعد دوباره تلاش کنید.' }); });
     return () => { disposed = true; };
   }, [appointmentId]);
-  if (!link) return null;
-  return <a href={link} target="_blank" rel="noopener noreferrer" className="block w-full rounded-xl bg-sky-500 hover:bg-sky-600 px-4 py-3 text-center text-sm font-bold text-white">اطلاع‌رسانی با تلگرام</a>;
+  const link = state.id === appointmentId ? state.link : '';
+  const message = state.id === appointmentId ? state.message : 'در حال بررسی امکان اطلاع‌رسانی…';
+  const style = 'block w-full rounded-xl px-4 py-3 text-center text-sm font-bold';
+  return <div className="space-y-2">
+    {link ? <a href={link} target="_blank" rel="noopener noreferrer" className={style + ' bg-sky-500 hover:bg-sky-600 text-white'}>اطلاع‌رسانی با تلگرام</a>
+      : <button type="button" disabled aria-describedby="telegram-availability" className={style + ' bg-sky-100 text-sky-700 cursor-not-allowed'}>اطلاع‌رسانی با تلگرام</button>}
+    {message && <p id="telegram-availability" role="status" className="text-center text-xs leading-5 text-slate-500">{message}</p>}
+  </div>;
 }
