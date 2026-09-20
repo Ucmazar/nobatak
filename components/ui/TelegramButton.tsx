@@ -12,7 +12,7 @@ export function TelegramButton({ appointmentId }: { appointmentId: string }) {
       try { token = localStorage.getItem('nobatak_ticket_' + appointmentId); } catch { /* Browser storage unavailable. */ }
       if (!disposed) setState({ id: appointmentId,
         link: config.enabled && token ? 'https://t.me/nobatech_bot?start=' + encodeURIComponent(token) : '',
-        message: !config.enabled ? 'اطلاع‌رسانی تلگرام هنوز فعال نشده است.' : !token ? 'این رسید لینک اتصال تلگرام ندارد؛ اطلاع‌رسانی برای نوبت‌های جدید پس از فعال‌سازی در دسترس است.' : '',
+        message: !config.enabled ? 'اطلاع‌رسانی تلگرام هنوز فعال نشده است.' : !token ? 'این رسید لینک اتصال تلگرام ندارد. اتصال تلگرام برای نوبت‌هایی که از زمان فعال‌سازی ثبت می‌شوند در دسترس است؛ نوبت فعلی شما همچنان در همین صفحه قابل پیگیری است.' : '',
       });
     }).catch(() => { if (!disposed) setState({ id: appointmentId, link: '', message: 'بررسی اتصال تلگرام ممکن نشد. کمی بعد دوباره تلاش کنید.' }); });
     return () => { disposed = true; };
