@@ -517,12 +517,12 @@ export default function DashboardPage() {
 
   // Appointment Operations
   const handleStatusChange = async (id: string, newStatus: AppointmentStatus) => {
-    const { success, error } = await updateAppointmentStatus(id, newStatus);
+    const { success, error, warning } = await updateAppointmentStatus(id, newStatus);
     if (!success) {
       setAlertMsg({ type: 'error', text: `خطا در به روزرسانی وضعیت نوبت: لطفاً دوباره تلاش کنید.` });
     } else {
       setAppointments(appointments.map(a => a.id === id ? { ...a, status: newStatus } : a));
-      setAlertMsg({ type: 'success', text: 'وضعیت نوبت به روز شد.' });
+      setAlertMsg({ type: warning ? 'error' : 'success', text: warning || 'وضعیت نوبت به روز شد.' });
     }
   };
 

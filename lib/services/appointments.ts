@@ -72,21 +72,13 @@ export async function createAppointment(
   }
 }
 
-export async function updateAppointmentStatus(
-  id: string,
-  status: AppointmentStatus
-): Promise<{ success: boolean; error: string | null }> {
+export async function updateAppointmentStatus(id: string, status: AppointmentStatus): Promise<{ success: boolean; error: string | null; warning?: string }> {
   try {
-    const { error } = await supabase
-      .from('appointments')
-      .update({ status })
-      .eq('id', id);
-
-    if (error) return { success: false, error: error.message };
-    return { success: true, error: null };
-  } catch (err: any) {
-    return { success: false, error: err.message };
-  }
+    const response = await fetch('/api/appointments/status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, status }) });
+    const result = await response.json();
+    if (!response.ok) return { success: false, error: result.error || 'ذخیرهٔ وضعیت نوبت انجام نشد.' };
+    return result;
+  } catch { return { success: false, error: 'ارتباط با سرور برقرار نشد.' }; }
 }
 
 export async function deleteAppointment(id: string): Promise<{ success: boolean; error: string | null }> {
