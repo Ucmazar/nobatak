@@ -24,10 +24,10 @@ export async function POST(request: Request) {
     } else if (text === 'مدیریت نوبت‌ها') {
       await management(chat, publicOrigin(request.url));
     } else {
-      const { data, error } = await db.from('telegram_subscriptions').select('appointment_id').eq('chat_id', chat).order('created_at', { ascending: false }).limit(10);
+      const { data, error } = await db.from('telegram_subscriptions').select('appointment_id,appointments!inner(status)').eq('chat_id', chat).in('appointments.status', ['waiting', 'serving']).order('created_at', { ascending: false }).limit(10);
       if (error) throw new Error('Read failed');
-      if (!data?.length) await send(chat, 'از سایت نوبت بگیرید و دکمهٔ «اطلاع‌رسانی با تلگرام» را بزنید تا نوبت شما وصل شود.');
-      else for (const row of data) { const status = await ticketStatus(row.appointment_id); if (status) await send(chat, status.text); }
+      if (!data?.length) await send(chat, 'نوبت فعالی به این حساب وصل نیست. نوبت‌های انجام‌شده و لغوشده نمایش داده نمی‌شوند.');
+      else for (const row of data) { const status = await ticketStatus(row.appointment_id); if (status && ['waiting', 'serving'].includes(status.appointment.status)) await send(chat, status.text); }
     }
     return Response.json({ ok: true });
   } catch { return new Response('Temporary failure', { status: 503 }); }

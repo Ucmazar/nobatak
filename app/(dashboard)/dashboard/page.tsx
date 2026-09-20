@@ -20,7 +20,8 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { QueueStatus } from '@/components/ui/QueueStatus';
-import { AppointmentCard } from '@/components/ui/AppointmentCard';
+import { StaffAppointmentTables } from '@/components/ui/StaffAppointmentTables';
+import { queueAhead } from '@/lib/queue';
 import { BusinessQRCode } from '@/components/ui/BusinessQRCode';
 import { AfghanDatePicker } from '@/components/ui/AfghanDatePicker';
 import { getUpcomingDaysAfghani, isoToAfghaniDate, getKabulTodayISO } from '@/lib/afghaniMonths';
@@ -542,7 +543,7 @@ export default function DashboardPage() {
     if (!selectedBusiness) return;
     const srv = services.find(s => s.id === app.service_id) || app.service;
     const st = staffMembers.find(s => s.id === app.staff_id) || app.staff;
-    const aheadCount = appointments.filter(a => a.status === 'waiting' && a.queue_number < app.queue_number).length;
+    const aheadCount = queueAhead(appointments, app.appointment_date, app.staff_id, app.queue_number);
     const duration = srv ? srv.duration_minutes : 20;
 
     downloadTicketImage({
@@ -989,27 +990,7 @@ export default function DashboardPage() {
                     </CardDescription>
                   </Card>
                 ) : (
-                  <div className="space-y-3">
-                    {filteredAppointments.map(app => (
-                      <div key={app.id} className="relative group">
-                        <AppointmentCard
-                          appointment={app}
-                          isOwnerView={true}
-                          onStatusChange={handleStatusChange}
-                          businessSlug={selectedBusiness?.slug}
-                          peopleAheadCount={appointments.filter(a => a.status === 'waiting' && a.queue_number < app.queue_number).length}
-                          onDownloadTicket={handleOwnerDownloadTicket}
-                        />
-                        <button
-                          onClick={() => handleDeleteAppointmentItem(app.id)}
-                          className="absolute left-2 top-2 text-[10px] text-rose-500 hover:text-rose-700 opacity-0 group-hover:opacity-100 transition-opacity bg-white p-1 rounded-md border border-rose-100"
-                          title="حذف نوبت"
-                        >
-                          🗑️ حذف
-                        </button>
-                      </div>
-                    ))}
-                  </div>
+                  <StaffAppointmentTables appointments={filteredAppointments} allAppointments={dateAppointments} staff={staffMembers} onStatusChange={handleStatusChange} onDelete={handleDeleteAppointmentItem} onDownload={handleOwnerDownloadTicket} />
                 )}
               </div>
             )}

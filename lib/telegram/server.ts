@@ -39,11 +39,11 @@ export async function ticketStatus(id: string) {
   return { appointment, business, ahead, text: `${business.name}\nنوبت شماره ${appointment.queue_number.toLocaleString('fa-AF')}\n${isoToAfghaniDate(appointment.appointment_date)}\n${labels[appointment.status] ?? 'وضعیت نوبت تغییر کرده است.'}`, fingerprint: `${appointment.appointment_date}:${appointment.status}:${ahead}`, near: appointment.appointment_date === getKabulTodayISO() && (appointment.status === 'serving' || (appointment.status === 'waiting' && ahead <= 3)) };
 }
 export async function management(chat: string, origin: string) {
-  const { data, error } = await database().from('telegram_subscriptions').select('appointment_id').eq('chat_id', chat).order('created_at', { ascending: false }).limit(10);
+  const { data, error } = await database().from('telegram_subscriptions').select('appointment_id,appointments!inner(status)').eq('chat_id', chat).in('appointments.status', ['waiting', 'serving']).order('created_at', { ascending: false }).limit(10);
   if (error) throw new Error('Subscription query failed');
-  if (!data?.length) { await send(chat, 'ابتدا در سایت نوبت بگیرید و دکمهٔ اطلاع‌رسانی با تلگرام را بزنید.'); return; }
+  if (!data?.length) { await send(chat, 'نوبت فعالی به این حساب وصل نیست. برای اتصال نوبت، دکمهٔ تلگرام روی رسید سایت را بزنید.'); return; }
   for (const item of data) {
-    const status = await ticketStatus(item.appointment_id); if (!status) continue;
+    const status = await ticketStatus(item.appointment_id); if (!status || !['waiting', 'serving'].includes(status.appointment.status)) continue;
     const url = `${origin}/q/${encodeURIComponent(status.business.slug)}#ticket=${signTicket(item.appointment_id, process.env.TELEGRAM_BOT_TOKEN!)}`;
     await send(chat, status.text, { inline_keyboard: [[{ text: 'مدیریت این نوبت در سایت', url }]] });
   }
