@@ -171,13 +171,6 @@ export default function AdminDashboardPage() {
         </div>
       )}
 
-      <a href="/admin/telegram" className="flex items-center justify-between gap-4 rounded-2xl border border-sky-700 bg-sky-950/50 p-5 text-white transition hover:bg-sky-900/50">
-        <div>
-          <h2 className="font-bold text-sky-200">اتصال ربات تلگرام</h2>
-          <p className="mt-1 text-sm text-slate-300">بررسی وضعیت ربات و تنظیم دریافت پیام‌های مشتریان</p>
-        </div>
-        <span className="shrink-0 rounded-xl bg-sky-600 px-4 py-2 text-sm font-bold">تنظیم تلگرام ←</span>
-      </a>
       {/* Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-lg">
