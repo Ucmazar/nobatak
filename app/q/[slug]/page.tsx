@@ -9,6 +9,7 @@ import { getBusinessServices } from '@/lib/services/services';
 import { getBusinessStaff } from '@/lib/services/staff';
 import { getBusinessAppointments } from '@/lib/services/appointments';
 import { createPublicAppointment as createAppointment, cancelPublicAppointment as deleteAppointment } from '@/lib/services/public-booking';
+import { queueAhead } from '@/lib/queue';
 import { TelegramButton } from '@/components/ui/TelegramButton';
 import { downloadTicketImage } from '@/lib/ticketImage';
 import { Button } from '@/components/ui/Button';
@@ -79,7 +80,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
   const loadAppointmentsForDate = useCallback(async (bizId: string, date: string) => {
     try {
       const appData = await getBusinessAppointments(bizId, date);
-      setAppointments(appData);
+      if (selectedDateRef.current === date) setAppointments(appData);
       return appData;
     } catch (err) {
       console.error('Error loading appointments:', err);
@@ -191,17 +192,17 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
   // ─── Queue Metrics ────────────────────────────────────────────────────────
   const dateAppointments = appointments.filter(a => a.appointment_date === selectedDate);
   const servingAppointment = dateAppointments.find(a => a.status === 'serving');
-  const waitingAppointments = dateAppointments.filter(a => a.status === 'waiting');
+  const bookingAhead = queueAhead(dateAppointments, selectedDate, selectedStaffId || null);
   const selectedService = services.find(s => s.id === selectedServiceId) || services[0] || null;
   const serviceDuration = selectedService ? selectedService.duration_minutes : 20;
 
   const selectedAppointment = myAppointments.find(a => a.id === activeTicketId) || myAppointments[0] || null;
   const peopleAheadCount = selectedAppointment
-    ? dateAppointments.filter(a => a.status === 'waiting' && a.queue_number < selectedAppointment.queue_number).length
+    ? queueAhead(dateAppointments, selectedAppointment.appointment_date, selectedAppointment.staff_id, selectedAppointment.queue_number)
     : 0;
   const estimatedWaitTime = selectedAppointment && !showBookingForm
     ? peopleAheadCount * serviceDuration
-    : waitingAppointments.length * serviceDuration;
+    : bookingAhead * serviceDuration;
 
   // ─── LocalStorage helpers ─────────────────────────────────────────────────
   const saveAppointmentToLocalStorage = (bizId: string, newApp: Appointment) => {
@@ -298,7 +299,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
     if (!selectedAppointment || !business) return;
     const chosenService = services.find(s => s.id === selectedAppointment.service_id) || selectedAppointment.service || selectedService;
     const chosenStaff = staffList.find(s => s.id === selectedAppointment.staff_id) || selectedAppointment.staff;
-    const aheadCount = dateAppointments.filter(a => a.status === 'waiting' && a.queue_number < selectedAppointment.queue_number).length;
+    const aheadCount = queueAhead(dateAppointments, selectedAppointment.appointment_date, selectedAppointment.staff_id, selectedAppointment.queue_number);
     const avgDuration = chosenService ? chosenService.duration_minutes : 20;
     downloadTicketImage({
       appointment: selectedAppointment,
@@ -451,7 +452,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
               {!showBookingForm && selectedAppointment ? 'افراد قبل از شما' : 'افراد در صف'}
             </span>
             <span className="text-2xl sm:text-3xl font-black text-amber-900 font-mono mt-1 block">
-              {!showBookingForm && selectedAppointment ? peopleAheadCount : waitingAppointments.length}
+              {!showBookingForm && selectedAppointment ? peopleAheadCount : bookingAhead}
             </span>
             <span className="text-[10px] text-amber-600 font-medium mt-1 block">نوبت در انتظار</span>
           </div>
@@ -609,13 +610,21 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
                       onChange={(e) => setSelectedStaffId(e.target.value)}
                       className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs text-slate-800 focus:ring-2 focus:ring-blue-100 focus:border-blue-600 focus:outline-none cursor-pointer"
                     >
-                      <option value="">فرقی نمی‌کند (اولین ارائه‌دهنده آزاد)</option>
+                      <option value="">بدون انتخاب کارمند (صف عمومی)</option>
                       {staffList.map(st => (
                         <option key={st.id} value={st.id}>{st.name}</option>
                       ))}
                     </select>
                   </div>
                 )}
+
+                <div role="status" aria-live="polite" className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-blue-950">
+                  {dateLoading ? 'در حال دریافت وضعیت صف…' : <>
+                    <p className="font-bold">{staffList.find(st => st.id === selectedStaffId)?.name || 'صف عمومی'} · {isoToAfghaniDate(selectedDate)}</p>
+                    <p className="mt-1">{bookingAhead.toLocaleString('fa-AF')} نفر پیش از شما هستند؛ اگر اکنون نوبت بگیرید، نفر {(bookingAhead + 1).toLocaleString('fa-AF')} صف خواهید بود.</p>
+                    <p className="mt-1 text-xs text-blue-700">جایگاه فعلی صف است و تا ثبت نوبت ممکن است تغییر کند.</p>
+                  </>}
+                </div>
 
                 <div className="space-y-3 pt-2 border-t border-slate-100">
                   <Input

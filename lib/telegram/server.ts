@@ -25,13 +25,14 @@ export async function send(chat: string, text: string, markup: object = keyboard
 }
 export async function ticketStatus(id: string) {
   const db = database();
-  const { data: appointment, error } = await db.from('appointments').select('id,business_id,queue_number,status,appointment_date').eq('id', id).maybeSingle();
+  const { data: appointment, error } = await db.from('appointments').select('id,business_id,staff_id,queue_number,status,appointment_date').eq('id', id).maybeSingle();
   if (error) throw new Error('Ticket query failed');
   if (!appointment) return null;
   const { data: business, error: bizError } = await db.from('businesses').select('name,slug,is_active').eq('id', appointment.business_id).single();
   if (bizError) throw new Error('Business query failed');
   if (business.is_active === false) return null;
-  const { count, error: countError } = await db.from('appointments').select('id', { count: 'exact', head: true }).eq('business_id', appointment.business_id).eq('appointment_date', appointment.appointment_date).in('status', ['waiting', 'serving']).lt('queue_number', appointment.queue_number);
+  const queueQuery = db.from('appointments').select('id', { count: 'exact', head: true }).eq('business_id', appointment.business_id).eq('appointment_date', appointment.appointment_date).in('status', ['waiting', 'serving']).lt('queue_number', appointment.queue_number);
+  const { count, error: countError } = await (appointment.staff_id ? queueQuery.eq('staff_id', appointment.staff_id) : queueQuery.is('staff_id', null));
   if (countError) throw new Error('Queue query failed');
   const ahead = count ?? 0;
   const labels: Record<string, string> = { waiting: `${ahead.toLocaleString('fa-AF')} نفر قبل از شما هستند.`, serving: 'اکنون نوبت شماست؛ لطفاً به مسئول مراجعه کنید.', completed: 'نوبت شما انجام شده است.', cancelled: 'نوبت شما لغو شده است.' };
