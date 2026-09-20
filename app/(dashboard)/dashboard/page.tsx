@@ -81,7 +81,7 @@ export default function DashboardPage() {
 
   // Appointments State & Modals
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [staffFilter, setStaffFilter] = useState('all');
+  const [hiddenStaffIds, setHiddenStaffIds] = useState<string[]>([]);
   const [appointmentFilter, setAppointmentFilter] = useState<'all' | 'waiting' | 'serving' | 'completed' | 'cancelled'>('all');
   const [isAddAppointmentModalOpen, setIsAddAppointmentModalOpen] = useState(false);
   const [custName, setCustName] = useState('');
@@ -257,7 +257,7 @@ export default function DashboardPage() {
 
   // Handle selecting another business
   const handleSelectBusiness = async (biz: Business) => {
-    setStaffFilter('all');
+    setHiddenStaffIds([]);
     setSelectedBusiness(biz);
     selectedBusinessRef.current = biz;
     if (biz.is_active !== false) await loadBusinessDetails(biz.id, selectedDateRef.current);
@@ -616,7 +616,7 @@ export default function DashboardPage() {
   const avgDuration = services.length > 0 ? services[0].duration_minutes : 20;
   const estWaitNewJoiner = waitingAppointments.length * avgDuration;
 
-  const staffAppointments = dateAppointments.filter(a => staffFilter === 'all' || (staffFilter === 'unassigned' ? !a.staff_id : a.staff_id === staffFilter));
+  const staffAppointments = dateAppointments.filter(a => !hiddenStaffIds.includes(a.staff_id || 'unassigned'));
   const filteredAppointments = staffAppointments.filter(a => {
     if (appointmentFilter === 'all') return true;
     return a.status === appointmentFilter;
@@ -957,15 +957,26 @@ export default function DashboardPage() {
                   </Button>
                 </div>
 
-                <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
-                  <label htmlFor="appointment-staff-filter" className="block text-sm font-bold text-slate-800">نوبت‌ها بر اساس کارمند / داکتر</label>
-                  <select id="appointment-staff-filter" value={staffFilter} onChange={e => setStaffFilter(e.target.value)} className="w-full sm:w-auto rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm">
-                    <option value="all">همهٔ کارمندان ({dateAppointments.length})</option>
-                    {staffMembers.map(person => <option key={person.id} value={person.id}>{person.name} ({dateAppointments.filter(a => a.staff_id === person.id).length})</option>)}
-                    <option value="unassigned">بدون انتخاب کارمند ({dateAppointments.filter(a => !a.staff_id).length})</option>
-                  </select>
-                  <p className="text-xs text-slate-500">این انتخاب در روز {isoToAfghaniDate(selectedDate)}: {staffAppointments.length} نوبت؛ {staffAppointments.filter(a => a.status === 'waiting').length} در انتظار؛ {staffAppointments.filter(a => a.status === 'serving').length} در حال خدمت</p>
-                </div>
+                <fieldset className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+                  <legend className="px-2 text-sm font-bold text-slate-800">نمایش نوبت‌های کارمندان / داکترها</legend>
+                  <div className="flex flex-wrap gap-x-6 gap-y-3">
+                    <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-700">
+                      <input type="checkbox" className="h-4 w-4 accent-blue-600" checked={hiddenStaffIds.length === 0}
+                        onChange={e => setHiddenStaffIds(e.target.checked ? [] : [...new Set([...staffMembers.map(person => person.id), ...dateAppointments.map(a => a.staff_id || 'unassigned'), 'unassigned'])])} />
+                      انتخاب همه
+                    </label>
+                    {[...staffMembers, { id: 'unassigned', name: 'بدون انتخاب کارمند' }].map(person => (
+                      <label key={person.id} className="inline-flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+                        <input type="checkbox" className="h-4 w-4 accent-blue-600" checked={!hiddenStaffIds.includes(person.id)}
+                          onChange={e => setHiddenStaffIds(previous => e.target.checked ? previous.filter(id => id !== person.id) : [...new Set([...previous, person.id])])} />
+                        {person.name}
+                        <span className="text-xs text-slate-400">({dateAppointments.filter(a => (a.staff_id || 'unassigned') === person.id).length.toLocaleString('fa-AF')})</span>
+                      </label>
+                    ))}
+                  </div>
+                  <p className="border-t border-slate-100 pt-3 text-xs text-slate-500" aria-live="polite">{staffAppointments.length.toLocaleString('fa-AF')} نوبت از کارمندان انتخاب‌شده در روز {isoToAfghaniDate(selectedDate)}</p>
+                </fieldset>
+
                 {/* Appointments List */}
                 {filteredAppointments.length === 0 ? (
                   <Card className="text-center py-12 border-dashed border-2">
