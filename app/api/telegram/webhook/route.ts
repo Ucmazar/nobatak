@@ -8,6 +8,27 @@ export async function POST(request: Request) {
     const update = await request.json(); const message = update.message;
     if (!message || message.chat?.type !== 'private' || !Number.isSafeInteger(message.chat.id) || typeof message.text !== 'string') return Response.json({ ok: true });
     const chat = String(message.chat.id); const text = message.text.trim(); const db = database();
+    if (text.startsWith('/start b_')) {
+      const bundleId = text.slice(9);
+      if (!/^[a-f0-9-]{36}$/i.test(bundleId)) { await send(chat, 'لینک اتصال معتبر نیست.'); return Response.json({ ok: true }); }
+      const now = new Date().toISOString();
+      const { error: claimError } = await db.from('telegram_ticket_bundles').update({ chat_id: chat }).eq('id', bundleId).is('chat_id', null).gt('expires_at', now);
+      if (claimError) throw new Error('Bundle claim failed');
+      const { data: bundle, error: bundleError } = await db.from('telegram_ticket_bundles').select('appointment_ids').eq('id', bundleId).eq('chat_id', chat).gt('expires_at', now).maybeSingle();
+      if (bundleError) throw new Error('Bundle query failed');
+      if (!bundle) { await send(chat, 'این لینک منقضی شده یا به حساب دیگری وصل است؛ دوباره دکمهٔ تلگرام روی رسید سایت را بزنید.'); return Response.json({ ok: true }); }
+      let linked = 0;
+      for (const id of bundle.appointment_ids) {
+        const status = await ticketStatus(id);
+        if (!status || !['waiting','serving'].includes(status.appointment.status)) continue;
+        const { data: bound, error } = await db.rpc('bind_telegram_ticket', { p_appointment: id, p_chat: chat });
+        if (error) throw new Error('Ticket bind failed');
+        if (!bound) continue;
+        await send(chat, status.text); linked++;
+      }
+      await send(chat, linked ? linked.toLocaleString('fa-AF') + ' نوبت فعال به این حساب وصل شد.' : 'نوبت قابل اتصالی در این لینک باقی نمانده است.');
+      return Response.json({ ok: true });
+    }
     if (text === 'دربارهٔ نوبتک' || text === '/about') {
       await send(chat, 'دربارهٔ نوبتک\n\nنوبتک توسط جناب فهیم‌الله برای سهولت مشتریان عزیز و مدیریت منظم نوبت‌های کسب‌وکارها ساخته شده است. با نوبتک می‌توانید نوبت بگیرید، کارمند یا داکتر مورد نظر خود را انتخاب کنید و وضعیت صف را پیگیری کنید. هدف ما کاهش انتظار و آسان‌ترشدن هماهنگی میان مشتریان و ارائه‌دهندگان خدمات است.');
     } else if (text === 'راهنمای استفاده' || text === '/help') {
@@ -30,7 +51,7 @@ export async function POST(request: Request) {
     } else if (text === 'مدیریت نوبت‌ها') {
       await management(chat, publicOrigin(request.url));
     } else {
-      const { data, error } = await db.from('telegram_subscriptions').select('appointment_id,appointments!inner(status)').eq('chat_id', chat).in('appointments.status', ['waiting', 'serving']).order('created_at', { ascending: false }).limit(10);
+      const { data, error } = await db.from('telegram_subscriptions').select('appointment_id,appointments!inner(status)').eq('chat_id', chat).in('appointments.status', ['waiting', 'serving']).order('created_at', { ascending: false });
       if (error) throw new Error('Read failed');
       if (!data?.length) await send(chat, 'نوبت فعالی به این حساب وصل نیست. نوبت‌های انجام‌شده و لغوشده نمایش داده نمی‌شوند.');
       else for (const row of data) { const status = await ticketStatus(row.appointment_id); if (status && ['waiting', 'serving'].includes(status.appointment.status)) await send(chat, status.text); }
