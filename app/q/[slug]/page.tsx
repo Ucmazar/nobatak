@@ -245,9 +245,10 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
     setSubmitting(true);
     setFormError(null);
 
-    const maxCapacity = business.max_daily_appointments ?? 20;
-    if (maxCapacity > 0 && dateAppointments.length >= maxCapacity) {
-      setFormError(`⚠️ تکمیل ظرفیت: سقف نوبت‌دهی کسب‌وکار برای تاریخ ${isoToAfghaniDate(selectedDate)} (${maxCapacity} نوبت) تکمیل گردیده است.`);
+    if (staffList.length > 0 && !selectedStaffId) { setFormError('لطفاً یک کارمند انتخاب کنید.'); return; }
+    const maxCapacity = staffList.find(st => st.id === selectedStaffId)?.max_daily_appointments ?? (staffList.length ? 20 : 0);
+    if (maxCapacity > 0 && dateAppointments.filter(a => (a.staff_id || '') === selectedStaffId && a.status !== 'cancelled').length >= maxCapacity) {
+      setFormError(`⚠️ تکمیل ظرفیت: سقف نوبت‌دهی این کارمند برای تاریخ ${isoToAfghaniDate(selectedDate)} (${maxCapacity} نوبت) تکمیل گردیده است.`);
       setSubmitting(false);
       return;
     }
@@ -270,7 +271,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
     });
 
     if (error || !newApp) {
-      setFormError(error === 'DAILY_CAPACITY_REACHED' ? 'ظرفیت این روز تکمیل شده است. لطفاً روز دیگری را انتخاب کنید.' : 'ثبت نوبت انجام نشد. لطفاً دوباره تلاش کنید.');
+      setFormError(error === 'DAILY_CAPACITY_REACHED' ? 'ظرفیت این کارمند در این روز تکمیل شده است؛ کارمند یا روز دیگری انتخاب کنید.' : 'ثبت نوبت انجام نشد. لطفاً دوباره تلاش کنید.');
     } else {
       saveAppointmentToLocalStorage(business.id, newApp);
       // Optimistic update — Real-Time will also fire but we update instantly
@@ -346,8 +347,8 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
   }
 
   const selectedDayInfo = upcomingDays.find(d => d.isoDate === selectedDate);
-  const maxCapacity = business.max_daily_appointments ?? 20;
-  const capacityFull = maxCapacity > 0 && dateAppointments.length >= maxCapacity;
+  const maxCapacity = selectedStaffId ? staffList.find(st => st.id === selectedStaffId)?.max_daily_appointments ?? 20 : 0;
+  const capacityFull = maxCapacity > 0 && dateAppointments.filter(a => (a.staff_id || '') === selectedStaffId && a.status !== 'cancelled').length >= maxCapacity;
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans pb-12">
@@ -398,8 +399,8 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
               {(business.opening_time || business.closing_time) && <span>ساعت کاری: {business.opening_time?.slice(0,5) || 'تعیین نشده'} تا {business.closing_time?.slice(0,5) || 'تعیین نشده'}{business.opening_time && business.closing_time && business.closing_time < business.opening_time ? ' (روز بعد)' : ''} — به وقت افغانستان</span>}
               {business.address && <span>📍 {business.address}</span>}
               {business.phone && <span className="dir-ltr text-right font-mono">📞 {business.phone}</span>}
-              <span>ظرفیت روز {isoToAfghaniDate(selectedDate)}: {maxCapacity === 0 ? 'بدون محدودیت' : maxCapacity.toLocaleString('fa-AF') + ' نوبت'}</span>
-              {maxCapacity > 0 && <span role="status">{capacityFull ? 'ظرفیت این روز تکمیل شده؛ روز دیگری انتخاب کنید.' : Math.max(0, maxCapacity - dateAppointments.length).toLocaleString('fa-AF') + ' نوبت باقی مانده'}</span>}
+              <span>ظرفیت کارمند انتخاب‌شده در روز {isoToAfghaniDate(selectedDate)}: {!selectedStaffId && staffList.length > 0 ? 'ابتدا کارمند را انتخاب کنید' : maxCapacity === 0 ? 'بدون محدودیت' : maxCapacity.toLocaleString('fa-AF') + ' نوبت'}</span>
+              {maxCapacity > 0 && <span role="status">{capacityFull ? 'ظرفیت این روز تکمیل شده؛ روز دیگری انتخاب کنید.' : Math.max(0, maxCapacity - dateAppointments.filter(a => (a.staff_id || '') === selectedStaffId && a.status !== 'cancelled').length).toLocaleString('fa-AF') + ' نوبت باقی مانده'}</span>}
             </div>
           )}
         </div>
@@ -573,7 +574,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
                 <CardDescription className="mt-1 text-xs">خدمت مورد نظر و اطلاعات خود را برای این روز وارد نمایید</CardDescription>
               </div>
               {myAppointments.length > 0 && (
-                <Button size="sm" variant="outline" onClick={() => setShowBookingForm(false)} className="text-xs font-bold shrink-0">
+                <Button size="sm" variant="outline" onClick={() => { window.history.replaceState(null, '', window.location.pathname); setShowBookingForm(false); }} className="text-xs font-bold shrink-0">
                   ⬅️ بازگشت به نوبت‌های من ({myAppointments.length})
                 </Button>
               )}
@@ -612,13 +613,13 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
 
                 {staffList.length > 0 && (
                   <div className="space-y-1.5">
-                    <label className="block text-xs font-bold text-slate-800">۲. انتخاب ارائه‌دهنده خدمت (اختیاری)</label>
+                    <label className="block text-xs font-bold text-slate-800">۲. انتخاب ارائه‌دهنده خدمت</label>
                     <select
                       value={selectedStaffId}
                       onChange={(e) => setSelectedStaffId(e.target.value)}
                       className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs text-slate-800 focus:ring-2 focus:ring-blue-100 focus:border-blue-600 focus:outline-none cursor-pointer"
                     >
-                      <option value="">بدون انتخاب کارمند (صف عمومی)</option>
+                      <option value="">کارمند مورد نظر را انتخاب کنید</option>
                       {staffList.map(st => (
                         <option key={st.id} value={st.id}>{st.name}</option>
                       ))}
@@ -652,6 +653,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
                 </div>
 
                 {/* Capacity full warning */}
+                {myAppointments.length > 0 && <Button type="button" variant="outline" className="w-full" onClick={() => { window.history.replaceState(null, '', window.location.pathname); setShowBookingForm(false); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>بازگشت به نوبت‌های من ({myAppointments.length})</Button>}
                 {capacityFull && (
                   <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 text-xs text-rose-800 text-center font-medium space-y-1">
                     <strong className="block font-bold text-sm text-rose-900">⚠️ تکمیل ظرفیت پذیرش نوبت برای این روز</strong>
@@ -659,7 +661,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
                   </div>
                 )}
 
-                <Button type="submit" size="lg" className="w-full mt-3 font-bold text-sm" isLoading={submitting} disabled={capacityFull}>
+                <Button type="submit" size="lg" className="w-full mt-3 font-bold text-sm" isLoading={submitting} disabled={capacityFull || (staffList.length > 0 && !selectedStaffId)}>
                   {capacityFull
                     ? 'ظرفیت نوبت‌دهی این روز تکمیل است'
                     : `تایید و دریافت شماره نوبت روز ${selectedDayInfo ? selectedDayInfo.dayName : isoToAfghaniDate(selectedDate)}`}

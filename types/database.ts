@@ -50,6 +50,7 @@ export interface Service {
 }
 
 export interface Staff {
+  max_daily_appointments?: number
   id: string
   business_id: string
   name: string

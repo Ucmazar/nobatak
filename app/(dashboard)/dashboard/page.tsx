@@ -78,6 +78,7 @@ export default function DashboardPage() {
   const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState<Staff | null>(null);
   const [staffName, setStaffName] = useState('');
+  const [staffCapacity, setStaffCapacity] = useState('20');
   const [staffSaving, setStaffSaving] = useState(false);
 
   // Appointments State & Modals
@@ -355,7 +356,6 @@ export default function DashboardPage() {
       logo_url: selectedBusiness.logo_url,
       phone: selectedBusiness.phone,
       address: selectedBusiness.address,
-      max_daily_appointments: selectedBusiness.max_daily_appointments ?? 20,
       opening_time: selectedBusiness.opening_time,
       closing_time: selectedBusiness.closing_time,
     });
@@ -466,10 +466,12 @@ export default function DashboardPage() {
     e.preventDefault();
     if (!staffName || !selectedBusiness) return;
 
+    const capacity = Number(staffCapacity);
+    if (!staffCapacity.trim() || !Number.isInteger(capacity) || capacity < 0 || capacity > 2147483647) { setAlertMsg({ type: 'error', text: 'ظرفیت باید عدد صحیح صفر یا بیشتر باشد.' }); return; }
     setStaffSaving(true);
 
     if (editingStaff) {
-      const { staff: updated, error } = await updateStaff(editingStaff.id, { name: staffName });
+      const { staff: updated, error } = await updateStaff(editingStaff.id, { name: staffName, max_daily_appointments: capacity });
       if (error || !updated) {
         setAlertMsg({ type: 'error', text: `خطا در ویرایش کارمند: لطفاً دوباره تلاش کنید.` });
       } else {
@@ -480,6 +482,7 @@ export default function DashboardPage() {
       const { staff: newSt, error } = await createStaff({
         business_id: selectedBusiness.id,
         name: staffName,
+        max_daily_appointments: capacity,
         is_active: true,
       });
 
@@ -494,7 +497,7 @@ export default function DashboardPage() {
     setStaffSaving(false);
     setIsStaffModalOpen(false);
     setEditingStaff(null);
-    setStaffName('');
+    setStaffName(''); setStaffCapacity('20');
   };
 
   const handleToggleStaffActive = async (st: Staff) => {
@@ -877,21 +880,7 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Capacity Status Banner */}
-                {selectedBusiness && selectedBusiness.max_daily_appointments !== undefined && selectedBusiness.max_daily_appointments > 0 && (
-                  <div className="bg-blue-50 border border-blue-200 rounded-2xl p-3.5 text-xs text-blue-900 flex items-center justify-between shadow-2xs">
-                    <span className="font-bold flex items-center gap-1.5">
-                      <span>📊</span>
-                      <span>ظرفیت پذیرش روزانه ({isoToAfghaniDate(selectedDate)}):</span>
-                    </span>
-                    <span className={`font-extrabold px-3 py-1 rounded-xl border ${
-                      dateAppointments.length >= selectedBusiness.max_daily_appointments
-                        ? 'bg-rose-50 text-rose-700 border-rose-200'
-                        : 'bg-white text-blue-700 border-blue-200'
-                    }`}>
-                      {dateAppointments.length} از {selectedBusiness.max_daily_appointments} نوبت {dateAppointments.length >= selectedBusiness.max_daily_appointments ? '(تکمیل شده)' : ''}
-                    </span>
-                  </div>
-                )}
+
 
                 <QueueStatus
                   currentServing={currentServingApp ? currentServingApp.queue_number : null}
@@ -1116,7 +1105,7 @@ export default function DashboardPage() {
                             👤
                           </div>
                           <div>
-                            <h4 className="font-bold text-slate-900 text-sm">{st.name}</h4>
+                            <h4 className="font-bold text-slate-900 text-sm">{st.name}</h4><p className="text-xs text-slate-500">ظرفیت روزانه: {st.max_daily_appointments === 0 ? 'نامحدود' : (st.max_daily_appointments ?? 20).toLocaleString('fa-AF')}</p>
                             <Badge variant={st.is_active ? 'emerald' : 'slate'} className="mt-1">
                               {st.is_active ? 'فعال' : 'غیرفعال'}
                             </Badge>
@@ -1124,6 +1113,7 @@ export default function DashboardPage() {
                         </div>
 
                         <div className="flex items-center gap-2">
+                          <Button size="sm" variant="outline" onClick={() => { setEditingStaff(st); setStaffName(st.name); setStaffCapacity(String(st.max_daily_appointments ?? 20)); setIsStaffModalOpen(true); }}>ویرایش</Button>
                           <Button
                             size="sm"
                             variant="outline"
@@ -1188,17 +1178,7 @@ export default function DashboardPage() {
                       onChange={(e) => setSelectedBusiness({ ...selectedBusiness, address: e.target.value })}
                     />
 
-                    <Input
-                      label="سقف پذیرش نوبت‌های روزانه (حداکثر پذیرش در یک روز)"
-                      type="number"
-                      min="0"
-                      max="2147483647"
-                      step="1"
-                      value={selectedBusiness.max_daily_appointments ?? 20}
-                      onChange={(e) => setSelectedBusiness({ ...selectedBusiness, max_daily_appointments: parseInt(e.target.value) || 0 })}
-                      helperText="تعداد حداکثر نوبت‌هایی که مشتریان می‌توانند در یک روز ثبت کنند. (عدد ۰ به معنی بدون محدودیت است)"
-                      className="dir-ltr text-right font-mono"
-                    />
+
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <Input type="time" label="ساعت شروع کار" value={selectedBusiness.opening_time?.slice(0,5) || ''} onChange={e => setSelectedBusiness({ ...selectedBusiness, opening_time: e.target.value || null })} />
@@ -1347,6 +1327,7 @@ export default function DashboardPage() {
         description="مشخصات ارائه‌دهنده خدمت را وارد نمایید"
       >
         <form onSubmit={handleSaveStaff} className="space-y-4">
+          <Input type="number" min="0" max="2147483647" step="1" label="ظرفیت روزانهٔ این کارمند" value={staffCapacity} onChange={e => setStaffCapacity(e.target.value)} helperText="صفر یعنی نامحدود. ظرفیت هر کارمند جدا محاسبه می‌شود." required />
           <Input
             label="نام و نام خانوادگی ارائه‌دهنده *"
             placeholder="مثلاً: علی رضایی"
