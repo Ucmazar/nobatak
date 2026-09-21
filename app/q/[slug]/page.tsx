@@ -548,7 +548,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
                 >
                   📸 دانلود رسید به صورت عکس (تصویر)
                 </Button>
-                <TelegramButton key={selectedAppointment.id} appointmentId={selectedAppointment.id} />
+                <TelegramButton key={selectedAppointment.id} appointmentIds={myAppointments.filter(a => a.status === 'waiting' || a.status === 'serving').map(a => a.id)} appointmentId={selectedAppointment.id} />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Button variant="outline" onClick={() => { setFormError(null); setShowBookingForm(true); }} className="text-xs font-bold py-2.5">
                     + ثبت نوبت جدید (برای روز دیگر یا دیگری)
