@@ -356,10 +356,12 @@ export default function DashboardPage() {
       phone: selectedBusiness.phone,
       address: selectedBusiness.address,
       max_daily_appointments: selectedBusiness.max_daily_appointments ?? 20,
+      opening_time: selectedBusiness.opening_time,
+      closing_time: selectedBusiness.closing_time,
     });
 
     if (error || !updated) {
-      setAlertMsg({ type: 'error', text: error === 'تنظیم ظرفیت هنوز در پایگاه داده تکمیل نشده است.' ? error : 'ذخیرهٔ تنظیمات انجام نشد. دوباره تلاش کنید.' });
+      setAlertMsg({ type: 'error', text: (error === 'تنظیم ظرفیت هنوز در پایگاه داده تکمیل نشده است.' || error === 'تنظیم ساعت کاری هنوز در پایگاه داده تکمیل نشده است.') ? error : 'ذخیرهٔ تنظیمات انجام نشد. دوباره تلاش کنید.' });
     } else {
       setBusinesses(businesses.map(b => b.id === updated.id ? updated : b));
       setSelectedBusiness(updated);
@@ -1197,6 +1199,12 @@ export default function DashboardPage() {
                       helperText="تعداد حداکثر نوبت‌هایی که مشتریان می‌توانند در یک روز ثبت کنند. (عدد ۰ به معنی بدون محدودیت است)"
                       className="dir-ltr text-right font-mono"
                     />
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <Input type="time" label="ساعت شروع کار" value={selectedBusiness.opening_time?.slice(0,5) || ''} onChange={e => setSelectedBusiness({ ...selectedBusiness, opening_time: e.target.value || null })} />
+                      <Input type="time" label="ساعت ختم کار" value={selectedBusiness.closing_time?.slice(0,5) || ''} onChange={e => setSelectedBusiness({ ...selectedBusiness, closing_time: e.target.value || null })} />
+                    </div>
+                    <p className="text-xs text-slate-500">ساعت‌ها به وقت افغانستان در صفحهٔ نوبت‌گیری نمایش داده می‌شوند. ختم زودتر از شروع، به معنی ختم در روز بعد است.</p>
 
                     <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
                       <button

@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { botReady } from '@/lib/telegram/server';
+import { botReady, publicOrigin } from '@/lib/telegram/server';
 import { notifyBusinesses } from '@/lib/telegram/notifications';
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     if (error || !updated) return Response.json({ success: false, error: 'ذخیرهٔ وضعیت نوبت انجام نشد.' }, { status: 409 });
     let warning: string | undefined;
     if (botReady()) {
-      try { await notifyBusinesses([appointment.business_id]); }
+      try { await notifyBusinesses([appointment.business_id], status === 'completed' ? [id] : [], publicOrigin(request.url)); }
       catch { warning = 'وضعیت نوبت ذخیره شد، اما ارسال اعلان تلگرام کامل نشد. برای تلاش دوباره همان وضعیت را انتخاب کنید.'; }
     }
     return Response.json({ success: true, error: null, warning });

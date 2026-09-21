@@ -15,7 +15,7 @@ export function businessPublicURL(origin: string, slug: string, configured?: str
     } catch { /* Invalid configuration must never produce a local QR code. */ }
   }
   if (isLocalHost(base.hostname) || !['https:', 'http:'].includes(base.protocol)) throw new Error('PUBLIC_SITE_URL_REQUIRED');
-  return new URL('/q/' + encodeURIComponent(slug), base.origin).href;
+  return new URL('/q/' + encodeURIComponent(slug) + '#book', base.origin).href;
 }
 
 export async function makeBusinessPoster(name: string, url: string, phone?: string | null) {

@@ -137,7 +137,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
         setMyAppointments(valid); localStorage.setItem(storageKey, JSON.stringify(valid));
         const active = linked && valid.find(item => item.id === linked!.id) || valid[valid.length - 1];
         if (active) {
-          setActiveTicketId(active.id); setShowBookingForm(false);
+          setActiveTicketId(active.id); setShowBookingForm(window.location.hash === '#book');
           setSelectedDate(active.appointment_date); selectedDateRef.current = active.appointment_date;
           setAppointments(liveRows.filter(item => item.appointment_date === active.appointment_date));
         } else setShowBookingForm(true);
@@ -176,6 +176,13 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
       supabase.removeChannel(channel);
     };
   }, [business, loadAppointmentsForDate]);
+
+  useEffect(() => {
+    const openBooking = () => { if (window.location.hash === '#book') setShowBookingForm(true); };
+    openBooking();
+    window.addEventListener('hashchange', openBooking);
+    return () => window.removeEventListener('hashchange', openBooking);
+  }, []);
 
   // ─── Handle date tab click (no page reload, lightweight spinner only) ─────
   const handleDateChange = async (newDate: string) => {
@@ -388,6 +395,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
           </div>
           {(
             <div className="pt-3 border-t border-white/10 flex flex-wrap gap-4 text-xs text-blue-100">
+              {(business.opening_time || business.closing_time) && <span>ساعت کاری: {business.opening_time?.slice(0,5) || 'تعیین نشده'} تا {business.closing_time?.slice(0,5) || 'تعیین نشده'}{business.opening_time && business.closing_time && business.closing_time < business.opening_time ? ' (روز بعد)' : ''} — به وقت افغانستان</span>}
               {business.address && <span>📍 {business.address}</span>}
               {business.phone && <span className="dir-ltr text-right font-mono">📞 {business.phone}</span>}
               <span>ظرفیت روز {isoToAfghaniDate(selectedDate)}: {maxCapacity === 0 ? 'بدون محدودیت' : maxCapacity.toLocaleString('fa-AF') + ' نوبت'}</span>

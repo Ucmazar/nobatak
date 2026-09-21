@@ -107,6 +107,7 @@ export async function updateBusiness(
       .single();
 
     if (error) {
+      if (error.message.includes('opening_time') || error.message.includes('closing_time')) return { business: null, error: 'تنظیم ساعت کاری هنوز در پایگاه داده تکمیل نشده است.' };
       if (error.message.includes('max_daily_appointments')) return { business: null, error: 'تنظیم ظرفیت هنوز در پایگاه داده تکمیل نشده است.' };
       return { business: null, error: error.message };
     }

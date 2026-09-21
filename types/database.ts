@@ -30,6 +30,8 @@ export interface Business {
   slug: string
   phone?: string | null
   address?: string | null
+  opening_time?: string | null
+  closing_time?: string | null
   max_daily_appointments?: number
   is_active?: boolean
   created_at: string

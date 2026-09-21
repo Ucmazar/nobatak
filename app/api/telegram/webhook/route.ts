@@ -22,7 +22,7 @@ export async function POST(request: Request) {
       const { data, error } = await db.rpc('bind_telegram_ticket', { p_appointment: id, p_chat: chat });
       if (error) throw new Error('Link failed');
       if (!data) { await send(chat, 'این نوبت قبلاً به حساب دیگری وصل شده است.'); return Response.json({ ok: true }); }
-      await send(chat, 'اعلان‌های این نوبت فعال شد. وقتی سه نفر یا کمتر تا نوبت شما باقی بماند، خبر می‌دهیم.\n\n' + status.text);
+      await send(chat, 'اعلان‌های این نوبت فعال شد.' + (status.appointment.status === 'waiting' && status.ahead > 3 ? ' وقتی سه نفر یا کمتر تا نوبت شما باقی بماند، خبر می‌دهیم.' : '') + '\n\n' + status.text);
     } else if (text === 'قطع اعلان‌ها' || text === '/stop') {
       const { error } = await db.from('telegram_subscriptions').update({ enabled: false }).eq('chat_id', chat);
       if (error) throw new Error('Stop failed');
