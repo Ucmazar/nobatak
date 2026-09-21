@@ -8,7 +8,13 @@ export async function POST(request: Request) {
     const update = await request.json(); const message = update.message;
     if (!message || message.chat?.type !== 'private' || !Number.isSafeInteger(message.chat.id) || typeof message.text !== 'string') return Response.json({ ok: true });
     const chat = String(message.chat.id); const text = message.text.trim(); const db = database();
-    if (text.startsWith('/start ')) {
+    if (text === 'دربارهٔ نوبتک' || text === '/about') {
+      await send(chat, 'دربارهٔ نوبتک\n\nنوبتک توسط جناب فهیم‌الله برای سهولت مشتریان عزیز و مدیریت منظم نوبت‌های کسب‌وکارها ساخته شده است. با نوبتک می‌توانید نوبت بگیرید، کارمند یا داکتر مورد نظر خود را انتخاب کنید و وضعیت صف را پیگیری کنید. هدف ما کاهش انتظار و آسان‌ترشدن هماهنگی میان مشتریان و ارائه‌دهندگان خدمات است.');
+    } else if (text === 'راهنمای استفاده' || text === '/help') {
+      await send(chat, 'راهنمای استفاده از ربات نوبتک\n\n۱. از لینک یا کیوآرکد کسب‌وکار وارد سایت شوید و روز، خدمت و کارمند را انتخاب کنید؛ سپس نوبت بگیرید.\n۲. روی رسید، «اطلاع‌رسانی با تلگرام» را بزنید و در ربات Start را انتخاب کنید تا همان نوبت وصل شود.\n۳. با «وضعیت نوبت من»، نوبت‌های فعال و تعداد افراد جلوتر را ببینید.\n۴. با «مدیریت نوبت‌ها»، رسید را در سایت باز کنید و در صورت نیاز نوبت را لغو کنید.\n۵. برای نوبت امروز، با پیش‌رفتن صف و نزدیک‌شدن یا شروع نوبت، اعلان دریافت می‌کنید.\n۶. «قطع اعلان‌ها» فقط پیام‌های خودکار را متوقف می‌کند و نوبت را لغو نمی‌کند. برای فعال‌سازی دوباره، از دکمهٔ تلگرام روی رسید استفاده کنید.');
+    } else if (text === '/start') {
+      await send(chat, 'به نوبتک خوش آمدید!\nبرای اتصال نوبت، دکمهٔ «اطلاع‌رسانی با تلگرام» روی رسید سایت را بزنید.\nاز دکمه‌های زیر می‌توانید دربارهٔ نوبتک بخوانید، راهنما را ببینید و نوبت‌های فعال خود را پیگیری کنید.');
+    } else if (text.startsWith('/start ')) {
       const id = verifyTicket(text.slice(7), process.env.TELEGRAM_BOT_TOKEN!);
       if (!id) { await send(chat, 'لینک نوبت معتبر نیست. از دکمهٔ داخل رسید نوبت استفاده کنید.'); return Response.json({ ok: true }); }
       const status = await ticketStatus(id);

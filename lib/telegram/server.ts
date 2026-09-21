@@ -14,7 +14,7 @@ export function publicOrigin(fallback: string) {
   if (parsed.protocol !== 'https:' || /^(localhost|127\.|10\.|192\.168\.)/.test(parsed.hostname)) throw new Error('Public HTTPS origin required');
   return parsed.origin;
 }
-export const keyboard = { keyboard: [[{ text: 'وضعیت نوبت من' }], [{ text: 'مدیریت نوبت‌ها' }, { text: 'قطع اعلان‌ها' }]], resize_keyboard: true, is_persistent: true };
+export const keyboard = { keyboard: [[{ text: 'وضعیت نوبت من' }], [{ text: 'مدیریت نوبت‌ها' }, { text: 'قطع اعلان‌ها' }], [{ text: 'دربارهٔ نوبتک' }, { text: 'راهنمای استفاده' }]], resize_keyboard: true, is_persistent: true };
 export async function send(chat: string, text: string, markup: object = keyboard) {
   const response = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
