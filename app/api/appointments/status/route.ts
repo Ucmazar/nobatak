@@ -1,3 +1,4 @@
+import { after } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { botReady, publicOrigin } from '@/lib/telegram/server';
 import { notifyBusinesses } from '@/lib/telegram/notifications';
@@ -19,11 +20,16 @@ export async function POST(request: Request) {
     if (!business || business.is_active === false || (business.owner_id !== user.id && profile.role !== 'superadmin')) return Response.json({ success: false }, { status: 403 });
     const { data: updated, error } = await client.from('appointments').update({ status }).eq('id', id).select('id').single();
     if (error || !updated) return Response.json({ success: false, error: 'ذخیرهٔ وضعیت نوبت انجام نشد.' }, { status: 409 });
-    let warning: string | undefined;
+    // Return after the database commit; Telegram latency must not block queue controls.
     if (botReady()) {
-      try { await notifyBusinesses([appointment.business_id], status === 'completed' ? [id] : [], publicOrigin(request.url)); }
-      catch { warning = 'وضعیت نوبت ذخیره شد، اما ارسال اعلان تلگرام کامل نشد. برای تلاش دوباره همان وضعیت را انتخاب کنید.'; }
+      after(async () => {
+        try {
+          await notifyBusinesses([appointment.business_id], status === 'completed' ? [id] : [], publicOrigin(request.url));
+        } catch {
+          console.error('Telegram notification failed after appointment status update', { appointmentId: id });
+        }
+      });
     }
-    return Response.json({ success: true, error: null, warning });
+    return Response.json({ success: true, error: null });
   } catch { return Response.json({ success: false, error: 'ارتباط با سرور برقرار نشد.' }, { status: 503 }); }
 }

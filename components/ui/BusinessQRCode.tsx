@@ -1,8 +1,10 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { usePendingActions } from '@/lib/use-pending-actions';
 import { businessPublicURL, makeBusinessPoster } from '@/lib/business-poster';
 
 export function BusinessQRCode({ name, slug, phone }: { name: string; slug: string; phone?: string | null }) {
+  const { runAction, isPending } = usePendingActions();
   const signature = JSON.stringify([name, slug, phone]);
   const [result, setResult] = useState({ signature: '', image: '', error: '' });
   const [printError, setPrintError] = useState('');
@@ -41,7 +43,7 @@ export function BusinessQRCode({ name, slug, phone }: { name: string; slug: stri
       {/* eslint-disable-next-line @next/next/no-img-element */}
       {image ? <img src={image} alt={`برگهٔ کیوآر ${name}`} width={226} height={320} className="rounded-xl bg-white border border-slate-200" /> : <div className="h-[320px] w-[226px] grid place-items-center text-xs text-slate-500">{current && result.error ? 'برگه آماده نیست' : 'در حال آماده‌سازی برگه…'}</div>}
       <div className="min-w-0 flex-1 space-y-4"><p className="font-bold text-sm">{name}</p>
-        <div className="flex flex-wrap gap-2"><button type="button" disabled={!image} onClick={printPoster} className="rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white disabled:opacity-40">چاپ برگهٔ کیوآر</button>{image && <a href={image} download={`nobatak-${slug}-poster.png`} className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-xs font-bold text-slate-700">دریافت تصویر کامل PNG</a>}</div>
+        <div className="flex flex-wrap gap-2"><button type="button" disabled={!image || isPending('print')} aria-busy={isPending('print')} onClick={() => runAction('print', printPoster)} className="rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white disabled:opacity-40">{isPending('print') ? 'در حال آماده‌سازی چاپ…' : 'چاپ برگهٔ کیوآر'}</button>{image && <a href={image} download={`nobatak-${slug}-poster.png`} className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-xs font-bold text-slate-700">دریافت تصویر کامل PNG</a>}</div>
       </div>
     </div>
   </section>;

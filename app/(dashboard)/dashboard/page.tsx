@@ -14,6 +14,7 @@ import { getBusinessStaff, createStaff, updateStaff, deleteStaff } from '@/lib/s
 import { getBusinessAppointments, createAppointment, updateAppointmentStatus, deleteAppointment } from '@/lib/services/appointments';
 import { downloadTicketImage } from '@/lib/ticketImage';
 
+import { usePendingActions } from '@/lib/use-pending-actions';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
@@ -28,6 +29,7 @@ import { getUpcomingDaysAfghani, isoToAfghaniDate, getKabulTodayISO } from '@/li
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { pending, runAction, isPending } = usePendingActions();
 
   const todayStr = getKabulTodayISO();
   const upcomingDays = getUpcomingDaysAfghani(7);
@@ -279,58 +281,65 @@ export default function DashboardPage() {
   // Create Business in Supabase
   const handleCreateBusiness = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) {
-      setBizFormError('لطفاً ابتدا وارد حساب کاربری خود شوید.');
-      return;
-    }
+    return runAction('business-form', async () => {
+      try {
+        if (!user) {
+          setBizFormError('لطفاً ابتدا وارد حساب کاربری خود شوید.');
+          return;
+        }
 
-    if (!canCreateBusiness) {
-      setBizFormError('به سقف مجاز تعداد کسب‌وکار رسیده‌اید. برای افزایش سقف با مدیر سیستم تماس بگیرید.');
-      return;
-    }
+        if (!canCreateBusiness) {
+          setBizFormError('به سقف مجاز تعداد کسب‌وکار رسیده‌اید. برای افزایش سقف با مدیر سیستم تماس بگیرید.');
+          return;
+        }
 
-    const trimmedName = bizName.trim();
-    if (!trimmedName) {
-      setBizFormError('لطفاً نام کسب‌وکار را وارد کنید.');
-      return;
-    }
+        const trimmedName = bizName.trim();
+        if (!trimmedName) {
+          setBizFormError('لطفاً نام کسب‌وکار را وارد کنید.');
+          return;
+        }
 
-    setBizSaving(true);
-    setBizFormError(null);
+        setBizSaving(true);
+        setBizFormError(null);
 
-    let candidateSlug = bizSlug.trim() || trimmedName;
-    let cleanSlug = slugify(candidateSlug);
+        let candidateSlug = bizSlug.trim() || trimmedName;
+        let cleanSlug = slugify(candidateSlug);
 
-    if (!cleanSlug) {
-      cleanSlug = `biz-${Date.now().toString(36)}`;
-    }
+        if (!cleanSlug) {
+          cleanSlug = `biz-${Date.now().toString(36)}`;
+        }
 
-    const { business: newBiz, error } = await createBusiness({
-      owner_id: user.id,
-      name: trimmedName,
-      category: bizCategory,
-      slug: cleanSlug,
-      phone: bizPhone || null,
-      address: bizAddress || null,
-      description: bizDescription || null,
-      logo_url: bizLogoUrl || null,
+        const { business: newBiz, error } = await createBusiness({
+          owner_id: user.id,
+          name: trimmedName,
+          category: bizCategory,
+          slug: cleanSlug,
+          phone: bizPhone || null,
+          address: bizAddress || null,
+          description: bizDescription || null,
+          logo_url: bizLogoUrl || null,
+        });
+
+        if (error || !newBiz) {
+          setBizFormError(`ذخیره انجام نشد: لطفاً دوباره تلاش کنید.`);
+          setBizSaving(false);
+          return;
+        }
+
+        setBusinesses([newBiz, ...businesses]);
+        selectedBusinessRef.current = newBiz;
+        setSelectedBusiness(newBiz);
+        await loadBusinessDetails(newBiz.id, selectedDate);
+
+        setIsBizModalOpen(false);
+        resetBizForm();
+        setBizSaving(false);
+        setAlertMsg({ type: 'success', text: 'کسب‌وکار جدید با موفقیت ثبت شد.' });
+      } catch {
+        setAlertMsg({ type: 'error', text: 'عملیات انجام نشد. لطفاً دوباره تلاش کنید.' });
+      }
+      finally { setBizSaving(false); }
     });
-
-    if (error || !newBiz) {
-      setBizFormError(`ذخیره انجام نشد: لطفاً دوباره تلاش کنید.`);
-      setBizSaving(false);
-      return;
-    }
-
-    setBusinesses([newBiz, ...businesses]);
-    selectedBusinessRef.current = newBiz;
-    setSelectedBusiness(newBiz);
-    await loadBusinessDetails(newBiz.id, selectedDate);
-
-    setIsBizModalOpen(false);
-    resetBizForm();
-    setBizSaving(false);
-    setAlertMsg({ type: 'success', text: 'کسب‌وکار جدید با موفقیت ثبت شد.' });
   };
 
   const resetBizForm = () => {
@@ -347,268 +356,350 @@ export default function DashboardPage() {
   // Update Business Settings in Supabase
   const handleUpdateBusinessSettings = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedBusiness) return;
+    return runAction('business-form', async () => {
+      try {
+        if (!selectedBusiness) return;
 
-    setBizSaving(true);
-    const { business: updated, error } = await updateBusiness(selectedBusiness.id, {
-      name: selectedBusiness.name,
-      description: selectedBusiness.description,
-      logo_url: selectedBusiness.logo_url,
-      phone: selectedBusiness.phone,
-      address: selectedBusiness.address,
-      opening_time: selectedBusiness.opening_time,
-      closing_time: selectedBusiness.closing_time,
+        setBizSaving(true);
+        const { business: updated, error } = await updateBusiness(selectedBusiness.id, {
+          name: selectedBusiness.name,
+          description: selectedBusiness.description,
+          logo_url: selectedBusiness.logo_url,
+          phone: selectedBusiness.phone,
+          address: selectedBusiness.address,
+          opening_time: selectedBusiness.opening_time,
+          closing_time: selectedBusiness.closing_time,
+        });
+
+        if (error || !updated) {
+          setAlertMsg({ type: 'error', text: (error === 'تنظیم ظرفیت هنوز در پایگاه داده تکمیل نشده است.' || error === 'تنظیم ساعت کاری هنوز در پایگاه داده تکمیل نشده است.') ? error : 'ذخیرهٔ تنظیمات انجام نشد. دوباره تلاش کنید.' });
+        } else {
+          setBusinesses(businesses.map(b => b.id === updated.id ? updated : b));
+          setSelectedBusiness(updated);
+          setAlertMsg({ type: 'success', text: 'اطلاعات کسب‌وکار به‌روز شد.' });
+        }
+        setBizSaving(false);
+      } catch {
+        setAlertMsg({ type: 'error', text: 'عملیات انجام نشد. لطفاً دوباره تلاش کنید.' });
+      }
+      finally { setBizSaving(false); }
     });
-
-    if (error || !updated) {
-      setAlertMsg({ type: 'error', text: (error === 'تنظیم ظرفیت هنوز در پایگاه داده تکمیل نشده است.' || error === 'تنظیم ساعت کاری هنوز در پایگاه داده تکمیل نشده است.') ? error : 'ذخیرهٔ تنظیمات انجام نشد. دوباره تلاش کنید.' });
-    } else {
-      setBusinesses(businesses.map(b => b.id === updated.id ? updated : b));
-      setSelectedBusiness(updated);
-      setAlertMsg({ type: 'success', text: 'اطلاعات کسب‌وکار به‌روز شد.' });
-    }
-    setBizSaving(false);
   };
 
   // Delete Business from Supabase
   const handleDeleteBusiness = async () => {
-    if (!selectedBusiness || !confirm('آیا از حذف این کسب‌وکار و تمام اطلاعات مرتبط با آن اطمینان دارید؟')) return;
+    return runAction('business-form', async () => {
+      try {
+        if (!selectedBusiness || !confirm('آیا از حذف این کسب‌وکار و تمام اطلاعات مرتبط با آن اطمینان دارید؟')) return;
 
-    const { success, error } = await deleteBusiness(selectedBusiness.id);
-    if (!success) {
-      setAlertMsg({ type: 'error', text: `خطا در حذف کسب‌وکار: لطفاً دوباره تلاش کنید.` });
-    } else {
-      const remaining = businesses.filter(b => b.id !== selectedBusiness.id);
-      setBusinesses(remaining);
-      if (remaining.length > 0) {
-        selectedBusinessRef.current = remaining[0];
-        setSelectedBusiness(remaining[0]);
-        loadBusinessDetails(remaining[0].id, selectedDate);
-      } else {
-        setSelectedBusiness(null);
-        setServices([]);
-        setStaffMembers([]);
-        setAppointments([]);
+        const { success, error } = await deleteBusiness(selectedBusiness.id);
+        if (!success) {
+          setAlertMsg({ type: 'error', text: `خطا در حذف کسب‌وکار: لطفاً دوباره تلاش کنید.` });
+        } else {
+          const remaining = businesses.filter(b => b.id !== selectedBusiness.id);
+          setBusinesses(remaining);
+          if (remaining.length > 0) {
+            selectedBusinessRef.current = remaining[0];
+            setSelectedBusiness(remaining[0]);
+            loadBusinessDetails(remaining[0].id, selectedDate);
+          } else {
+            setSelectedBusiness(null);
+            setServices([]);
+            setStaffMembers([]);
+            setAppointments([]);
+          }
+          setAlertMsg({ type: 'success', text: 'کسب‌وکار با موفقیت حذف شد.' });
+        }
+      } catch {
+        setAlertMsg({ type: 'error', text: 'عملیات انجام نشد. لطفاً دوباره تلاش کنید.' });
       }
-      setAlertMsg({ type: 'success', text: 'کسب‌وکار با موفقیت حذف شد.' });
-    }
+    });
   };
 
   // Service CRUD operations
   const handleSaveService = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!serviceName || !selectedBusiness) return;
+    return runAction(editingService ? 'service:' + editingService.id : 'service-new', async () => {
+      try {
+        if (!serviceName || !selectedBusiness) return;
 
-    setServiceSaving(true);
-    const duration = parseInt(serviceDuration) || 15;
+        setServiceSaving(true);
+        const duration = parseInt(serviceDuration) || 15;
 
-    if (editingService) {
-      const { service: updated, error } = await updateService(editingService.id, {
-        name: serviceName,
-        description: serviceDescription,
-        duration_minutes: duration,
-      });
+        if (editingService) {
+          const { service: updated, error } = await updateService(editingService.id, {
+            name: serviceName,
+            description: serviceDescription,
+            duration_minutes: duration,
+          });
 
-      if (error || !updated) {
-        setAlertMsg({ type: 'error', text: `خطا در ویرایش خدمت: لطفاً دوباره تلاش کنید.` });
-      } else {
-        setServices(services.map(s => s.id === updated.id ? updated : s));
-        setAlertMsg({ type: 'success', text: 'خدمت با موفقیت ویرایش شد.' });
+          if (error || !updated) {
+            setAlertMsg({ type: 'error', text: `خطا در ویرایش خدمت: لطفاً دوباره تلاش کنید.` });
+          } else {
+            setServices(previous => previous.map(s => s.id === updated.id ? updated : s));
+            setAlertMsg({ type: 'success', text: 'خدمت با موفقیت ویرایش شد.' });
+          }
+        } else {
+          const { service: newSrv, error } = await createService({
+            business_id: selectedBusiness.id,
+            name: serviceName,
+            description: serviceDescription,
+            duration_minutes: duration,
+            is_active: true,
+          });
+
+          if (error || !newSrv) {
+            setAlertMsg({ type: 'error', text: `خطا در ایجاد خدمت: لطفاً دوباره تلاش کنید.` });
+          } else {
+            setServices(previous => [...previous.filter(s => s.id !== newSrv.id), newSrv]);
+            setAlertMsg({ type: 'success', text: 'خدمت جدید ثبت شد.' });
+          }
+        }
+
+        setServiceSaving(false);
+        setIsServiceModalOpen(false);
+        setEditingService(null);
+        setServiceName('');
+        setServiceDescription('');
+        setServiceDuration('20');
+      } catch {
+        setAlertMsg({ type: 'error', text: 'عملیات انجام نشد. لطفاً دوباره تلاش کنید.' });
       }
-    } else {
-      const { service: newSrv, error } = await createService({
-        business_id: selectedBusiness.id,
-        name: serviceName,
-        description: serviceDescription,
-        duration_minutes: duration,
-        is_active: true,
-      });
-
-      if (error || !newSrv) {
-        setAlertMsg({ type: 'error', text: `خطا در ایجاد خدمت: لطفاً دوباره تلاش کنید.` });
-      } else {
-        setServices([...services, newSrv]);
-        setAlertMsg({ type: 'success', text: 'خدمت جدید ثبت شد.' });
-      }
-    }
-
-    setServiceSaving(false);
-    setIsServiceModalOpen(false);
-    setEditingService(null);
-    setServiceName('');
-    setServiceDescription('');
-    setServiceDuration('20');
+      finally { setServiceSaving(false); }
+    });
   };
 
   const handleToggleServiceActive = async (service: Service) => {
-    const newStatus = !service.is_active;
-    const { service: updated, error } = await updateService(service.id, { is_active: newStatus });
-    if (error || !updated) {
-      setAlertMsg({ type: 'error', text: `خطا در تغییر وضعیت خدمت: لطفاً دوباره تلاش کنید.` });
-    } else {
-      setServices(services.map(s => s.id === updated.id ? updated : s));
-    }
+    return runAction('service:' + service.id, async () => {
+      try {
+        const newStatus = !service.is_active;
+        const { service: updated, error } = await updateService(service.id, { is_active: newStatus });
+        if (error || !updated) {
+          setAlertMsg({ type: 'error', text: `خطا در تغییر وضعیت خدمت: لطفاً دوباره تلاش کنید.` });
+        } else {
+          setServices(previous => previous.map(s => s.id === updated.id ? updated : s));
+        }
+      } catch {
+        setAlertMsg({ type: 'error', text: 'عملیات انجام نشد. لطفاً دوباره تلاش کنید.' });
+      }
+    });
   };
 
   const handleDeleteServiceItem = async (serviceId: string) => {
-    if (!confirm('آیا از حذف این خدمت اطمینان دارید؟')) return;
-    const { success, error } = await deleteService(serviceId);
-    if (success) {
-      setServices(services.filter(s => s.id !== serviceId));
-      setAlertMsg({ type: 'success', text: 'خدمت حذف شد.' });
-    } else {
-      setAlertMsg({ type: 'error', text: `خطا در حذف خدمت: لطفاً دوباره تلاش کنید.` });
-    }
+    return runAction('service:' + serviceId, async () => {
+      try {
+        if (!confirm('آیا از حذف این خدمت اطمینان دارید؟')) return;
+        const { success, error } = await deleteService(serviceId);
+        if (success) {
+          setServices(previous => previous.filter(s => s.id !== serviceId));
+          setAlertMsg({ type: 'success', text: 'خدمت حذف شد.' });
+        } else {
+          setAlertMsg({ type: 'error', text: `خطا در حذف خدمت: لطفاً دوباره تلاش کنید.` });
+        }
+      } catch {
+        setAlertMsg({ type: 'error', text: 'عملیات انجام نشد. لطفاً دوباره تلاش کنید.' });
+      }
+    });
   };
 
   // Staff CRUD operations
   const handleSaveStaff = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!staffName || !selectedBusiness) return;
+    return runAction(editingStaff ? 'staff:' + editingStaff.id : 'staff-new', async () => {
+      try {
+        if (!staffName || !selectedBusiness) return;
 
-    const capacity = Number(staffCapacity);
-    if (!staffCapacity.trim() || !Number.isInteger(capacity) || capacity < 0 || capacity > 2147483647) { setAlertMsg({ type: 'error', text: 'ظرفیت باید عدد صحیح صفر یا بیشتر باشد.' }); return; }
-    setStaffSaving(true);
+        const capacity = Number(staffCapacity);
+        if (!staffCapacity.trim() || !Number.isInteger(capacity) || capacity < 0 || capacity > 2147483647) { setAlertMsg({ type: 'error', text: 'ظرفیت باید عدد صحیح صفر یا بیشتر باشد.' }); return; }
+        setStaffSaving(true);
 
-    if (editingStaff) {
-      const { staff: updated, error } = await updateStaff(editingStaff.id, { name: staffName, max_daily_appointments: capacity });
-      if (error || !updated) {
-        setAlertMsg({ type: 'error', text: `خطا در ویرایش کارمند: لطفاً دوباره تلاش کنید.` });
-      } else {
-        setStaffMembers(staffMembers.map(st => st.id === updated.id ? updated : st));
-        setAlertMsg({ type: 'success', text: 'نام کارمند به روزرسانی شد.' });
+        if (editingStaff) {
+          const { staff: updated, error } = await updateStaff(editingStaff.id, { name: staffName, max_daily_appointments: capacity });
+          if (error || !updated) {
+            setAlertMsg({ type: 'error', text: `خطا در ویرایش کارمند: لطفاً دوباره تلاش کنید.` });
+          } else {
+            setStaffMembers(previous => previous.map(st => st.id === updated.id ? updated : st));
+            setAlertMsg({ type: 'success', text: 'نام کارمند به روزرسانی شد.' });
+          }
+        } else {
+          const { staff: newSt, error } = await createStaff({
+            business_id: selectedBusiness.id,
+            name: staffName,
+            max_daily_appointments: capacity,
+            is_active: true,
+          });
+
+          if (error || !newSt) {
+            setAlertMsg({ type: 'error', text: `خطا در ثبت کارمند: لطفاً دوباره تلاش کنید.` });
+          } else {
+            setStaffMembers(previous => [...previous.filter(st => st.id !== newSt.id), newSt]);
+            setAlertMsg({ type: 'success', text: 'کارمند جدید ثبت شد.' });
+          }
+        }
+
+        setStaffSaving(false);
+        setIsStaffModalOpen(false);
+        setEditingStaff(null);
+        setStaffName(''); setStaffCapacity('20');
+      } catch {
+        setAlertMsg({ type: 'error', text: 'عملیات انجام نشد. لطفاً دوباره تلاش کنید.' });
       }
-    } else {
-      const { staff: newSt, error } = await createStaff({
-        business_id: selectedBusiness.id,
-        name: staffName,
-        max_daily_appointments: capacity,
-        is_active: true,
-      });
-
-      if (error || !newSt) {
-        setAlertMsg({ type: 'error', text: `خطا در ثبت کارمند: لطفاً دوباره تلاش کنید.` });
-      } else {
-        setStaffMembers([...staffMembers, newSt]);
-        setAlertMsg({ type: 'success', text: 'کارمند جدید ثبت شد.' });
-      }
-    }
-
-    setStaffSaving(false);
-    setIsStaffModalOpen(false);
-    setEditingStaff(null);
-    setStaffName(''); setStaffCapacity('20');
+      finally { setStaffSaving(false); }
+    });
   };
 
   const handleToggleStaffActive = async (st: Staff) => {
-    const newStatus = !st.is_active;
-    const { staff: updated, error } = await updateStaff(st.id, { is_active: newStatus });
-    if (error || !updated) {
-      setAlertMsg({ type: 'error', text: `خطا در تغییر وضعیت پرسنل: لطفاً دوباره تلاش کنید.` });
-    } else {
-      setStaffMembers(staffMembers.map(s => s.id === updated.id ? updated : s));
-    }
+    return runAction('staff:' + st.id, async () => {
+      try {
+        const newStatus = !st.is_active;
+        const { staff: updated, error } = await updateStaff(st.id, { is_active: newStatus });
+        if (error || !updated) {
+          setAlertMsg({ type: 'error', text: `خطا در تغییر وضعیت پرسنل: لطفاً دوباره تلاش کنید.` });
+        } else {
+          setStaffMembers(previous => previous.map(s => s.id === updated.id ? updated : s));
+        }
+      } catch {
+        setAlertMsg({ type: 'error', text: 'عملیات انجام نشد. لطفاً دوباره تلاش کنید.' });
+      }
+    });
   };
 
   const handleDeleteStaffItem = async (staffId: string) => {
-    if (!confirm('آیا از حذف این پرسنل اطمینان دارید؟')) return;
-    const { success, error } = await deleteStaff(staffId);
-    if (success) {
-      setStaffMembers(staffMembers.filter(st => st.id !== staffId));
-      setAlertMsg({ type: 'success', text: 'پرونده کارمند حذف شد.' });
-    } else {
-      setAlertMsg({ type: 'error', text: `خطا در حذف کارمند: لطفاً دوباره تلاش کنید.` });
-    }
+    return runAction('staff:' + staffId, async () => {
+      try {
+        if (!confirm('آیا از حذف این پرسنل اطمینان دارید؟')) return;
+        const { success, error } = await deleteStaff(staffId);
+        if (success) {
+          setStaffMembers(previous => previous.filter(st => st.id !== staffId));
+          setAlertMsg({ type: 'success', text: 'پرونده کارمند حذف شد.' });
+        } else {
+          setAlertMsg({ type: 'error', text: `خطا در حذف کارمند: لطفاً دوباره تلاش کنید.` });
+        }
+      } catch {
+        setAlertMsg({ type: 'error', text: 'عملیات انجام نشد. لطفاً دوباره تلاش کنید.' });
+      }
+    });
   };
 
   // Appointment Operations
   const handleStatusChange = async (id: string, newStatus: AppointmentStatus) => {
-    const { success, error, warning } = await updateAppointmentStatus(id, newStatus);
-    if (!success) {
-      setAlertMsg({ type: 'error', text: `خطا در به روزرسانی وضعیت نوبت: لطفاً دوباره تلاش کنید.` });
-    } else {
-      setAppointments(appointments.map(a => a.id === id ? { ...a, status: newStatus } : a));
-      setAlertMsg({ type: warning ? 'error' : 'success', text: warning || 'وضعیت نوبت به روز شد.' });
-    }
+    return runAction('appointment:' + id, async () => {
+      try {
+        const { success, error, warning } = await updateAppointmentStatus(id, newStatus);
+        if (!success) {
+          setAlertMsg({ type: 'error', text: `خطا در به روزرسانی وضعیت نوبت: لطفاً دوباره تلاش کنید.` });
+        } else {
+          setAppointments(previous => previous.map(a => a.id === id ? { ...a, status: newStatus } : a));
+          setAlertMsg({ type: warning ? 'error' : 'success', text: warning || 'وضعیت نوبت به روز شد.' });
+        }
+      } catch {
+        setAlertMsg({ type: 'error', text: 'عملیات انجام نشد. لطفاً دوباره تلاش کنید.' });
+      }
+    });
   };
 
   const handleDeleteAppointmentItem = async (appId: string) => {
-    if (!confirm('آیا از حذف این نوبت اطمینان دارید؟')) return;
-    const { success, error } = await deleteAppointment(appId);
-    if (success) {
-      setAppointments(appointments.filter(a => a.id !== appId));
-      setAlertMsg({ type: 'success', text: 'نوبت حذف شد.' });
-    } else {
-      setAlertMsg({ type: 'error', text: `خطا در حذف نوبت: لطفاً دوباره تلاش کنید.` });
-    }
+    return runAction('appointment:' + appId, async () => {
+      try {
+        if (!confirm('آیا از حذف این نوبت اطمینان دارید؟')) return;
+        const { success, error } = await deleteAppointment(appId);
+        if (success) {
+          setAppointments(previous => previous.filter(a => a.id !== appId));
+          setAlertMsg({ type: 'success', text: 'نوبت حذف شد.' });
+        } else {
+          setAlertMsg({ type: 'error', text: `خطا در حذف نوبت: لطفاً دوباره تلاش کنید.` });
+        }
+      } catch {
+        setAlertMsg({ type: 'error', text: 'عملیات انجام نشد. لطفاً دوباره تلاش کنید.' });
+      }
+    });
   };
 
   // Download ticket image for walk-in appointment from Owner Dashboard
   const handleOwnerDownloadTicket = (app: Appointment) => {
-    if (!selectedBusiness) return;
-    const srv = services.find(s => s.id === app.service_id) || app.service;
-    const st = staffMembers.find(s => s.id === app.staff_id) || app.staff;
-    const aheadCount = queueAhead(appointments, app.appointment_date, app.staff_id, app.queue_number);
-    const duration = srv ? srv.duration_minutes : 20;
+    return runAction('appointment:' + app.id, async () => {
+      try {
+        if (!selectedBusiness) return;
+        const srv = services.find(s => s.id === app.service_id) || app.service;
+        const st = staffMembers.find(s => s.id === app.staff_id) || app.staff;
+        const aheadCount = queueAhead(appointments, app.appointment_date, app.staff_id, app.queue_number);
+        const duration = srv ? srv.duration_minutes : 20;
 
-    downloadTicketImage({
-      appointment: app,
-      business: {
-        name: selectedBusiness.name,
-        description: selectedBusiness.description,
-        phone: selectedBusiness.phone,
-        address: selectedBusiness.address,
-      },
-      serviceName: srv?.name || null,
-      staffName: st?.name || null,
-      peopleAhead: aheadCount,
-      estimatedWaitMinutes: aheadCount * duration,
+        downloadTicketImage({
+          appointment: app,
+          business: {
+            name: selectedBusiness.name,
+            description: selectedBusiness.description,
+            phone: selectedBusiness.phone,
+            address: selectedBusiness.address,
+          },
+          serviceName: srv?.name || null,
+          staffName: st?.name || null,
+          peopleAhead: aheadCount,
+          estimatedWaitMinutes: aheadCount * duration,
+        });
+      } catch {
+        setAlertMsg({ type: 'error', text: 'عملیات انجام نشد. لطفاً دوباره تلاش کنید.' });
+      }
     });
   };
 
   // Create Walk-in Appointment from Owner Dashboard for SELECTED DATE
   const handleAddAppointment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!custName || !selectedBusiness) return;
+    return runAction('appointment-new', async () => {
+      try {
+        if (!custName || !selectedBusiness) return;
 
-    setAppointmentSaving(true);
-    // Queue number is scoped for the selected date!
-    const nextQueueNum = appointments.length > 0 ? Math.max(...appointments.map(a => a.queue_number)) + 1 : 1;
-    const selectedSrv = services.find(s => s.id === selectedServiceId) || services[0] || null;
-    const selectedSt = staffMembers.find(s => s.id === selectedStaffId) || staffMembers[0] || null;
+        setAppointmentSaving(true);
+        // Queue number is scoped for the selected date!
+        const nextQueueNum = appointments.length > 0 ? Math.max(...appointments.map(a => a.queue_number)) + 1 : 1;
+        const selectedSrv = services.find(s => s.id === selectedServiceId) || services[0] || null;
+        const selectedSt = staffMembers.find(s => s.id === selectedStaffId) || staffMembers[0] || null;
 
-    const waitingCount = appointments.filter(a => a.status === 'waiting').length;
-    const avgDuration = selectedSrv ? selectedSrv.duration_minutes : 20;
-    const estWait = waitingCount * avgDuration;
+        const waitingCount = appointments.filter(a => a.status === 'waiting').length;
+        const avgDuration = selectedSrv ? selectedSrv.duration_minutes : 20;
+        const estWait = waitingCount * avgDuration;
 
-    const { appointment: newApp, error } = await createAppointment({
-      business_id: selectedBusiness.id,
-      service_id: selectedSrv?.id || null,
-      staff_id: selectedSt?.id || null,
-      customer_name: custName,
-      customer_phone: custPhone || null,
-      queue_number: nextQueueNum,
-      status: 'waiting',
-      estimated_wait_minutes: estWait,
-      appointment_date: selectedDate,
+        const { appointment: newApp, error } = await createAppointment({
+          business_id: selectedBusiness.id,
+          service_id: selectedSrv?.id || null,
+          staff_id: selectedSt?.id || null,
+          customer_name: custName,
+          customer_phone: custPhone || null,
+          queue_number: nextQueueNum,
+          status: 'waiting',
+          estimated_wait_minutes: estWait,
+          appointment_date: selectedDate,
+        });
+
+        if (error || !newApp) {
+          setAlertMsg({ type: 'error', text: `ثبت نوبت انجام نشد: لطفاً دوباره تلاش کنید.` });
+        } else {
+          if (selectedBusinessRef.current?.id === newApp.business_id && selectedDateRef.current === newApp.appointment_date) setAppointments(previous => [...previous.filter(a => a.id !== newApp.id), newApp]);
+          setIsAddAppointmentModalOpen(false);
+          setCustName('');
+          setCustPhone('');
+          setAlertMsg({ type: 'success', text: `نوبت شماره #${nextQueueNum} برای تاریخ ${isoToAfghaniDate(selectedDate)} با موفقیت ذخیره شد.` });
+        }
+        setAppointmentSaving(false);
+      } catch {
+        setAlertMsg({ type: 'error', text: 'عملیات انجام نشد. لطفاً دوباره تلاش کنید.' });
+      }
+      finally { setAppointmentSaving(false); }
     });
-
-    if (error || !newApp) {
-      setAlertMsg({ type: 'error', text: `ثبت نوبت انجام نشد: لطفاً دوباره تلاش کنید.` });
-    } else {
-      setAppointments([...appointments, newApp]);
-      setIsAddAppointmentModalOpen(false);
-      setCustName('');
-      setCustPhone('');
-      setAlertMsg({ type: 'success', text: `نوبت شماره #${nextQueueNum} برای تاریخ ${isoToAfghaniDate(selectedDate)} با موفقیت ذخیره شد.` });
-    }
-    setAppointmentSaving(false);
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    document.cookie = 'sb-access-token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;';
-    router.push('/login');
+    return runAction('logout', async () => {
+      try {
+        await supabase.auth.signOut();
+        document.cookie = 'sb-access-token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+        router.push('/login');
+      } catch {
+        setAlertMsg({ type: 'error', text: 'عملیات انجام نشد. لطفاً دوباره تلاش کنید.' });
+      }
+    });
   };
 
   // Display Name of Logged-in User
@@ -666,6 +757,7 @@ export default function DashboardPage() {
             {/* Business Switcher Dropdown */}
             {businesses.length > 0 && selectedBusiness && (
               <select
+                disabled={pending.size > 0}
                 value={selectedBusiness.id}
                 onChange={(e) => {
                   const b = businesses.find(item => item.id === e.target.value);
@@ -688,7 +780,7 @@ export default function DashboardPage() {
               + کسب‌وکار جدید
             </Button>
 
-            <Button variant="outline" size="sm" onClick={handleLogout} className="text-xs text-rose-600 border-rose-200 hover:bg-rose-50">
+            <Button variant="outline" size="sm" isLoading={isPending('logout')} onClick={handleLogout} className="text-xs text-rose-600 border-rose-200 hover:bg-rose-50">
               خروج
             </Button>
           </div>
@@ -981,7 +1073,7 @@ export default function DashboardPage() {
                     </CardDescription>
                   </Card>
                 ) : (
-                  <StaffAppointmentTables appointments={filteredAppointments} allAppointments={dateAppointments} staff={staffMembers} onStatusChange={handleStatusChange} onDelete={handleDeleteAppointmentItem} onDownload={handleOwnerDownloadTicket} />
+                  <StaffAppointmentTables pendingActions={pending} appointments={filteredAppointments} allAppointments={dateAppointments} staff={staffMembers} onStatusChange={handleStatusChange} onDelete={handleDeleteAppointmentItem} onDownload={handleOwnerDownloadTicket} />
                 )}
               </div>
             )}
@@ -1036,16 +1128,16 @@ export default function DashboardPage() {
                         <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2">
                             <button
-                              onClick={() => handleToggleServiceActive(srv)}
+                              disabled={isPending('service:' + srv.id)} aria-busy={isPending('service:' + srv.id)} onClick={() => handleToggleServiceActive(srv)}
                               className="text-xs font-bold text-slate-600 hover:text-slate-900 cursor-pointer"
                             >
-                              {srv.is_active ? 'غیرفعال‌سازی' : 'فعال‌سازی'}
+                              {isPending('service:' + srv.id) ? 'در حال انجام…' : srv.is_active ? 'غیرفعال‌سازی' : 'فعال‌سازی'}
                             </button>
                             <Button
                               size="sm"
                               variant="outline"
                               className="text-xs px-2.5 py-1"
-                              onClick={() => {
+                              disabled={isPending('service:' + srv.id)} onClick={() => {
                                 setEditingService(srv);
                                 setServiceName(srv.name);
                                 setServiceDescription(srv.description || '');
@@ -1057,7 +1149,7 @@ export default function DashboardPage() {
                             </Button>
                           </div>
                           <button
-                            onClick={() => handleDeleteServiceItem(srv.id)}
+                            disabled={isPending('service:' + srv.id)} aria-busy={isPending('service:' + srv.id)} onClick={() => handleDeleteServiceItem(srv.id)}
                             className="text-xs text-rose-600 hover:underline"
                           >
                             حذف
@@ -1113,17 +1205,17 @@ export default function DashboardPage() {
                         </div>
 
                         <div className="flex items-center gap-2">
-                          <Button size="sm" variant="outline" onClick={() => { setEditingStaff(st); setStaffName(st.name); setStaffCapacity(String(st.max_daily_appointments ?? 20)); setIsStaffModalOpen(true); }}>ویرایش</Button>
+                          <Button size="sm" variant="outline" disabled={isPending('staff:' + st.id)} onClick={() => { setEditingStaff(st); setStaffName(st.name); setStaffCapacity(String(st.max_daily_appointments ?? 20)); setIsStaffModalOpen(true); }}>ویرایش</Button>
                           <Button
                             size="sm"
                             variant="outline"
                             className="text-xs px-2 py-1"
-                            onClick={() => handleToggleStaffActive(st)}
+                            disabled={isPending('staff:' + st.id)} aria-busy={isPending('staff:' + st.id)} onClick={() => handleToggleStaffActive(st)}
                           >
-                            {st.is_active ? 'تغییر' : 'فعال‌سازی'}
+                            {isPending('staff:' + st.id) ? 'در حال انجام…' : st.is_active ? 'تغییر' : 'فعال‌سازی'}
                           </Button>
                           <button
-                            onClick={() => handleDeleteStaffItem(st.id)}
+                            disabled={isPending('staff:' + st.id)} aria-busy={isPending('staff:' + st.id)} onClick={() => handleDeleteStaffItem(st.id)}
                             className="text-xs text-rose-600 hover:underline px-1"
                           >
                             حذف
@@ -1147,6 +1239,7 @@ export default function DashboardPage() {
                   <BusinessQRCode key={selectedBusiness.id} name={selectedBusiness.name} slug={selectedBusiness.slug} phone={selectedBusiness.phone} />
                   <div className="mt-6" />
                   <form onSubmit={handleUpdateBusinessSettings} className="space-y-4">
+          <fieldset disabled={isPending('business-form')} aria-busy={isPending('business-form')} className="space-y-4 min-w-0">
                     <Input
                       label="نام کسب‌وکار *"
                       value={selectedBusiness.name}
@@ -1189,17 +1282,18 @@ export default function DashboardPage() {
                     <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
                       <button
                         type="button"
-                        onClick={handleDeleteBusiness}
+                        disabled={isPending('business-form')} aria-busy={isPending('business-form')} onClick={handleDeleteBusiness}
                         className="text-xs font-bold text-rose-600 hover:bg-rose-50 px-3 py-2 rounded-lg transition-colors"
                       >
                         🗑️ حذف کامل این کسب‌وکار
                       </button>
 
-                      <Button type="submit" isLoading={bizSaving}>
+                      <Button type="submit" isLoading={bizSaving || isPending('business-form')}>
                         ذخیره تغییرات
                       </Button>
                     </div>
-                  </form>
+                  </fieldset>
+        </form>
                 </CardContent>
               </Card>
             )}
@@ -1211,6 +1305,7 @@ export default function DashboardPage() {
       <Modal
         isOpen={isBizModalOpen}
         onClose={() => {
+          if (isPending('business-form')) return;
           setIsBizModalOpen(false);
           resetBizForm();
         }}
@@ -1224,6 +1319,7 @@ export default function DashboardPage() {
         )}
 
         <form onSubmit={handleCreateBusiness} className="space-y-4">
+          <fieldset disabled={isPending('business-form')} aria-busy={isPending('business-form')} className="space-y-4 min-w-0">
           <Input
             label="نام کسب‌وکار *"
             placeholder="مثلاً: آرایشگاه VIP، کلینیک شفا"
@@ -1265,21 +1361,23 @@ export default function DashboardPage() {
             <Button type="button" variant="outline" onClick={() => setIsBizModalOpen(false)}>
               انصراف
             </Button>
-            <Button type="submit" isLoading={bizSaving}>
+            <Button type="submit" isLoading={bizSaving || isPending('business-form')}>
               ذخیره و ایجاد
             </Button>
           </div>
+        </fieldset>
         </form>
       </Modal>
 
       {/* MODAL: Add / Edit Service */}
       <Modal
         isOpen={isServiceModalOpen}
-        onClose={() => setIsServiceModalOpen(false)}
+        onClose={() => { if (!(isPending(editingService ? 'service:' + editingService.id : 'service-new'))) setIsServiceModalOpen(false); }}
         title={editingService ? 'ویرایش خدمت' : 'افزودن خدمت جدید'}
         description="مشخصات خدمت را برای ذخیره دائم وارد نمایید"
       >
         <form onSubmit={handleSaveService} className="space-y-4">
+          <fieldset disabled={isPending(editingService ? 'service:' + editingService.id : 'service-new')} aria-busy={isPending(editingService ? 'service:' + editingService.id : 'service-new')} className="space-y-4 min-w-0">
           <Input
             label="عنوان خدمت *"
             placeholder="مثلاً: اصلاح مو، فیشیال صورت"
@@ -1316,17 +1414,19 @@ export default function DashboardPage() {
               {editingService ? 'ذخیره تغییرات' : 'افزودن خدمت'}
             </Button>
           </div>
+        </fieldset>
         </form>
       </Modal>
 
       {/* MODAL: Add / Edit Staff */}
       <Modal
         isOpen={isStaffModalOpen}
-        onClose={() => setIsStaffModalOpen(false)}
+        onClose={() => { if (!(isPending(editingStaff ? 'staff:' + editingStaff.id : 'staff-new'))) setIsStaffModalOpen(false); }}
         title={editingStaff ? 'ویرایش همکار' : 'افزودن ارائه‌دهنده خدمت'}
         description="مشخصات ارائه‌دهنده خدمت را وارد نمایید"
       >
         <form onSubmit={handleSaveStaff} className="space-y-4">
+          <fieldset disabled={isPending(editingStaff ? 'staff:' + editingStaff.id : 'staff-new')} aria-busy={isPending(editingStaff ? 'staff:' + editingStaff.id : 'staff-new')} className="space-y-4 min-w-0">
           <Input type="number" min="0" max="2147483647" step="1" label="ظرفیت روزانهٔ این کارمند" value={staffCapacity} onChange={e => setStaffCapacity(e.target.value)} helperText="صفر یعنی نامحدود. ظرفیت هر کارمند جدا محاسبه می‌شود." required />
           <Input
             label="نام و نام خانوادگی ارائه‌دهنده *"
@@ -1344,13 +1444,14 @@ export default function DashboardPage() {
               ثبت ارائه‌دهنده
             </Button>
           </div>
+        </fieldset>
         </form>
       </Modal>
 
       {/* MODAL: Add Walk-in Appointment */}
       <Modal
         isOpen={isAddAppointmentModalOpen}
-        onClose={() => setIsAddAppointmentModalOpen(false)}
+        onClose={() => { if (!(isPending('appointment-new'))) setIsAddAppointmentModalOpen(false); }}
         title={`ثبت نوبت جدید (حضوری / دستی) - تاریخ ${isoToAfghaniDate(selectedDate)}`}
         description="مشخصات نوبت را برای ذخیره دائم در صف ثبت کنید"
       >
@@ -1370,6 +1471,7 @@ export default function DashboardPage() {
           </div>
         )}
         <form onSubmit={handleAddAppointment} className="space-y-4">
+          <fieldset disabled={isPending('appointment-new')} aria-busy={isPending('appointment-new')} className="space-y-4 min-w-0">
           <Input
             label="نام مشتری *"
             placeholder="مثلاً: محمد حسینی"
@@ -1426,6 +1528,7 @@ export default function DashboardPage() {
               ثبت نوبت برای {isoToAfghaniDate(selectedDate)}
             </Button>
           </div>
+        </fieldset>
         </form>
       </Modal>
     </div>

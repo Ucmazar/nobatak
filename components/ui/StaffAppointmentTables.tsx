@@ -1,7 +1,8 @@
 import { Appointment, AppointmentStatus, Staff } from '@/types/database';
 import { queueAhead } from '@/lib/queue';
 
-export function StaffAppointmentTables({ appointments, allAppointments, staff, onStatusChange, onDelete, onDownload }: {
+export function StaffAppointmentTables({ appointments, allAppointments, staff, pendingActions, onStatusChange, onDelete, onDownload }: {
+  pendingActions: ReadonlySet<string>;
   appointments: Appointment[]; allAppointments: Appointment[]; staff: Staff[];
   onStatusChange: (id: string, status: AppointmentStatus) => void;
   onDelete: (id: string) => void; onDownload: (appointment: Appointment) => void;
@@ -23,13 +24,13 @@ export function StaffAppointmentTables({ appointments, allAppointments, staff, o
         <td className="p-3"><p className="font-semibold">{app.customer_name}</p><p className="text-xs text-slate-500">{app.service?.name || '—'}</p>{app.customer_phone && <p dir="ltr" className="text-right text-xs text-slate-500">{app.customer_phone}</p>}</td>
         <td className="p-3">{app.status === 'waiting' ? queueAhead(allAppointments, app.appointment_date, app.staff_id, app.queue_number).toLocaleString('fa-AF') : '—'}</td>
         <td className="p-3">{labels[app.status]}</td>
-        <td className="p-3"><div className="flex flex-wrap gap-2 text-xs">
-          {app.status === 'waiting' && <button onClick={() => onStatusChange(app.id, 'serving')} className="rounded-lg bg-blue-600 px-3 py-2 text-white">شروع نوبت</button>}
-          {app.status === 'serving' && <button onClick={() => onStatusChange(app.id, 'completed')} className="rounded-lg bg-emerald-600 px-3 py-2 text-white">پایان نوبت</button>}
-          {['waiting','serving'].includes(app.status) && <button onClick={() => onStatusChange(app.id, 'cancelled')} className="rounded-lg border px-3 py-2">لغو نوبت</button>}
-          <button onClick={() => onDownload(app)} className="rounded-lg border px-3 py-2">دریافت رسید</button>
-          <button onClick={() => onDelete(app.id)} className="rounded-lg px-3 py-2 text-rose-600">حذف</button>
-        </div></td>
+        <td className="p-3"><fieldset disabled={pendingActions.has("appointment:" + app.id)} aria-busy={pendingActions.has("appointment:" + app.id)} className="flex flex-wrap gap-2 text-xs disabled:opacity-60 [&:disabled_button]:cursor-wait">
+          {app.status === 'waiting' && <button type="button" onClick={() => onStatusChange(app.id, 'serving')} className="rounded-lg bg-blue-600 px-3 py-2 text-white">شروع نوبت</button>}
+          {app.status === 'serving' && <button type="button" onClick={() => onStatusChange(app.id, 'completed')} className="rounded-lg bg-emerald-600 px-3 py-2 text-white">پایان نوبت</button>}
+          {['waiting','serving'].includes(app.status) && <button type="button" onClick={() => onStatusChange(app.id, 'cancelled')} className="rounded-lg border px-3 py-2">لغو نوبت</button>}
+          <button type="button" onClick={() => onDownload(app)} className="rounded-lg border px-3 py-2">دریافت رسید</button>
+          <button type="button" onClick={() => onDelete(app.id)} className="rounded-lg px-3 py-2 text-rose-600">حذف</button>
+        <span role="status" className="self-center text-blue-700">{pendingActions.has("appointment:" + app.id) ? "در حال انجام…" : ""}</span></fieldset></td>
       </tr>)}</tbody>
     </table></div>
   </section>)}</div>;
