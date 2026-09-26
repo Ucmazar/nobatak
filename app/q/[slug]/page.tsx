@@ -2,16 +2,22 @@
 
 import React, { useState, useEffect, use, useCallback, useRef } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
+import { createLiveRefresh } from '@/lib/live-refresh';
+import { getBookingDay, type BookingDay } from '@/lib/booking-day';
+import { usePendingActions } from '@/lib/use-pending-actions';
+import { getTelegramConfig } from '@/lib/telegram/client';
+import { QueueSkeleton } from '@/components/ui/QueueSkeleton';
+import { readPublicCatalog, savePublicCatalog, clearPublicCatalog } from '@/lib/public-catalog';
 import { supabase } from '@/lib/supabase/client';
 import { Business, Service, Staff, Appointment } from '@/types/database';
 import { getBusinessBySlug } from '@/lib/services/businesses';
 import { getBusinessServices } from '@/lib/services/services';
 import { getBusinessStaff } from '@/lib/services/staff';
-import { getBusinessAppointments } from '@/lib/services/appointments';
+import { getBusinessAppointments, invalidateAppointmentReads } from '@/lib/services/appointments';
 import { createPublicAppointment as createAppointment, cancelPublicAppointment as deleteAppointment } from '@/lib/services/public-booking';
 import { queueAhead } from '@/lib/queue';
 import { TelegramButton } from '@/components/ui/TelegramButton';
-import { downloadTicketImage } from '@/lib/ticketImage';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
@@ -27,6 +33,12 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
   const resolvedParams = use(params);
   const slug = resolvedParams.slug;
 
+  const { runAction, pending } = usePendingActions();
+  const [bookingDay, setBookingDay] = useState<BookingDay | null>(null);
+  const [catalogChecking, setCatalogChecking] = useState(true);
+  const [queueError, setQueueError] = useState<string | null>(null);
+  const appointmentsRef = useRef<Appointment[]>([]);
+  const queueVersion = useRef(0);
   const todayStr = getKabulTodayISO();
   const upcomingDays = getUpcomingDaysAfghani(7);
 
@@ -59,43 +71,45 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [actionAlert, setActionAlert] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  useEffect(() => {
-    let disposed = false;
-    let pending = false;
-    const timer = window.setInterval(async () => {
-      if (pending) return;
-      pending = true;
-      try {
-        const current = await getBusinessBySlug(slug);
-        if (!disposed && !current) { businessRef.current = null; setBusiness(null); }
-      } finally { pending = false; }
-    }, 5000);
-    return () => { disposed = true; clearInterval(timer); };
-  }, [slug]);
+  useEffect(() => { appointmentsRef.current = appointments; }, [appointments]);
+  useEffect(() => { void getTelegramConfig().catch(() => {}); }, []);
 
   // ─── Keep refs in sync ────────────────────────────────────────────────────
   useEffect(() => { selectedDateRef.current = selectedDate; }, [selectedDate]);
 
   // ─── Load appointments for a given date (NO full-page reload) ────────────
   const loadAppointmentsForDate = useCallback(async (bizId: string, date: string) => {
+    const version = queueVersion.current;
     try {
-      const appData = await getBusinessAppointments(bizId, date);
-      if (selectedDateRef.current === date) setAppointments(appData);
+      const [appData, day] = await Promise.all([getBusinessAppointments(bizId, date, true), getBookingDay(bizId, date)]);
+      if (businessRef.current?.id !== bizId || queueVersion.current !== version) return appData;
+      if (selectedDateRef.current === date) { setAppointments(appData); setBookingDay(day); setQueueError(null); }
+      setMyAppointments(previous => previous.flatMap(item => {
+        if (item.appointment_date !== date) return [item];
+        const live = appData.find(row => row.id === item.id);
+        return live && ['waiting','serving'].includes(live.status) ? [live] : [];
+      }));
       return appData;
-    } catch (err) {
-      console.error('Error loading appointments:', err);
-      return [];
+    } catch {
+      if (businessRef.current?.id === bizId && selectedDateRef.current === date) setQueueError('اطلاعات صف تأیید نشد. اتصال را بررسی کنید؛ ثبت نوبت پس از تأیید فعال می‌شود.');
+      return null;
     }
   }, []);
 
   // ─── INITIAL DATA FETCH — runs only when slug changes (NOT on date change) ─
   useEffect(() => {
+    let disposed = false;
+    const cached = readPublicCatalog(slug);
+    if (cached) { setBusiness(cached.business); setServices(cached.services); setStaffList(cached.staff); setLoading(false); }
     async function loadPublicData() {
       try {
-        setLoading(true);
-        const bizData = await getBusinessBySlug(slug);
+        setCatalogChecking(true);
+        if (!cached) setLoading(true);
+        const bizData = await getBusinessBySlug(slug, true);
 
+        if (disposed) return;
         if (!bizData) {
+          clearPublicCatalog(slug);
           setBusiness(null);
           return;
         }
@@ -103,12 +117,16 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
         setBusiness(bizData);
         businessRef.current = bizData;
 
-        const [srvData, stData, appData] = await Promise.all([
+        const [srvData, stData, appData, day] = await Promise.all([
           getBusinessServices(bizData.id, true),
           getBusinessStaff(bizData.id, true),
-          getBusinessAppointments(bizData.id, todayStr),
+          getBusinessAppointments(bizData.id, todayStr, true),
+          getBookingDay(bizData.id, todayStr),
         ]);
 
+        if (disposed) return;
+        setBookingDay(day);
+        savePublicCatalog(slug, bizData, srvData, stData);
         setServices(srvData);
         if (srvData.length > 0) setSelectedServiceId(srvData[0].id);
         setStaffList(stData);
@@ -125,57 +143,65 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
           const result = await response.json();
           if (response.ok && result.appointment?.business_id === bizData.id) {
             linked = result.appointment;
-            localStorage.setItem('nobatak_ticket_' + linked!.id, incoming);
+            try { localStorage.setItem('nobatak_ticket_' + linked!.id, incoming); } catch { /* Optional storage. */ }
             saved = [...saved.filter(item => item.id !== linked!.id), linked!];
             history.replaceState(null, '', window.location.pathname + window.location.search);
           } else setActionAlert({ type: 'error', text: 'لینک نوبت معتبر نیست یا نوبت دیگر موجود نیست.' });
         }
         const dates = [...new Set(saved.map(item => item.appointment_date).filter(date => date && date !== todayStr))];
-        const otherDays = await Promise.all(dates.map(date => getBusinessAppointments(bizData.id, date)));
+        const otherDays = await Promise.all(dates.map(date => getBusinessAppointments(bizData.id, date, true)));
+        if (disposed) return;
         const liveRows = [...appData, ...otherDays.flat()];
         const valid = saved.flatMap(item => { const live = liveRows.find(row => row.id === item.id); return live && ['waiting','serving'].includes(live.status) ? [live] : []; });
-        setMyAppointments(valid); localStorage.setItem(storageKey, JSON.stringify(valid));
+        setMyAppointments(valid); try { localStorage.setItem(storageKey, JSON.stringify(valid)); } catch { /* Keep tickets in memory. */ }
         const active = linked && valid.find(item => item.id === linked!.id) || valid[valid.length - 1];
         if (active) {
           setActiveTicketId(active.id); setShowBookingForm(window.location.hash === '#book');
           setSelectedDate(active.appointment_date); selectedDateRef.current = active.appointment_date;
           setAppointments(liveRows.filter(item => item.appointment_date === active.appointment_date));
+          setBookingDay(await getBookingDay(bizData.id, active.appointment_date));
         } else setShowBookingForm(true);
 
       } catch (err) {
-        console.error('Error loading public page:', err);
-        setBusiness(null);
+        if (!disposed) setQueueError('دریافت اطلاعات زنده ممکن نشد. اتصال را بررسی و دوباره تلاش کنید.');
       } finally {
-        setLoading(false);
+        if (!disposed) { setLoading(false); setCatalogChecking(false); }
       }
     }
 
-    loadPublicData();
+    void loadPublicData();
+    return () => { disposed = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]); // Only depends on slug — date changes do NOT trigger this
 
-  // ─── Real-Time Subscription (Instant Updates without Polling) ───────────
+  // Reconcile live rows and public settings without repeated full-page loading.
+  const liveBusinessId = business?.id;
   useEffect(() => {
-    if (!business) return;
-
-    const channel = supabase
-      .channel(`public:rt:${business.id}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'appointments' },
-        async (payload: any) => {
-          const rowBizId = payload?.new?.business_id || payload?.old?.business_id;
-          if (!rowBizId || rowBizId === business.id) {
-            await loadAppointmentsForDate(business.id, selectedDateRef.current);
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [business, loadAppointmentsForDate]);
+    if (!liveBusinessId || catalogChecking) return;
+    const refresh = createLiveRefresh(async () => {
+      await loadAppointmentsForDate(liveBusinessId, selectedDateRef.current);
+    }, () => document.visibilityState !== 'hidden' && navigator.onLine);
+    const settings = createLiveRefresh(async () => {
+      const current = await getBusinessBySlug(slug, true);
+      if (!current) { businessRef.current = null; setBusiness(null); clearPublicCatalog(slug); return; }
+      const [srv, staff] = await Promise.all([getBusinessServices(current.id, true), getBusinessStaff(current.id, true)]);
+      businessRef.current = current; setBusiness(current); setServices(srv); setStaffList(staff);
+      savePublicCatalog(slug, current, srv, staff);
+    }, () => document.visibilityState !== 'hidden' && navigator.onLine);
+    const channel = supabase.channel('public:rt:' + liveBusinessId)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'appointments', filter: 'business_id=eq.' + liveBusinessId }, refresh.request)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'appointments', filter: 'business_id=eq.' + liveBusinessId }, refresh.request)
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'appointments' }, payload => {
+        if (appointmentsRef.current.some(row => row.id === payload.old.id)) refresh.request();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'business_day_closures', filter: 'business_id=eq.' + liveBusinessId }, refresh.request)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'businesses', filter: 'id=eq.' + liveBusinessId }, settings.request)
+      .subscribe(status => { refresh.connection(status); settings.connection(status); });
+    const resume = () => { refresh.request(); settings.request(); };
+    window.addEventListener('focus', resume); window.addEventListener('online', resume);
+    document.addEventListener('visibilitychange', resume);
+    return () => { refresh.close(); settings.close(); window.removeEventListener('focus', resume); window.removeEventListener('online', resume); document.removeEventListener('visibilitychange', resume); void supabase.removeChannel(channel); };
+  }, [liveBusinessId, catalogChecking, slug, loadAppointmentsForDate]);
 
   useEffect(() => {
     const openBooking = () => { if (window.location.hash === '#book') setShowBookingForm(true); };
@@ -187,13 +213,14 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
   // ─── Handle date tab click (no page reload, lightweight spinner only) ─────
   const handleDateChange = async (newDate: string) => {
     if (newDate === selectedDate) return;
+    setAppointments([]); setBookingDay(null);
     setSelectedDate(newDate);
     selectedDateRef.current = newDate;
     const biz = businessRef.current;
     if (!biz) return;
     setDateLoading(true);
     await loadAppointmentsForDate(biz.id, newDate);
-    setDateLoading(false);
+    if (selectedDateRef.current === newDate) setDateLoading(false);
   };
 
   // ─── Queue Metrics ────────────────────────────────────────────────────────
@@ -218,14 +245,14 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
     const updated = [...existing, newApp];
     setMyAppointments(updated);
     setActiveTicketId(newApp.id);
-    localStorage.setItem(storageKey, JSON.stringify(updated));
+    try { localStorage.setItem(storageKey, JSON.stringify(updated)); } catch { /* Ticket stays in memory. */ }
   };
 
   const removeAppointmentFromLocalStorage = (bizId: string, appId: string) => {
     const storageKey = `nobatak_user_apps_${bizId}`;
     const updated = myAppointments.filter(a => a.id !== appId);
     setMyAppointments(updated);
-    localStorage.setItem(storageKey, JSON.stringify(updated));
+    try { localStorage.setItem(storageKey, JSON.stringify(updated)); } catch { /* Ticket stays in memory. */ }
     if (updated.length > 0) {
       setActiveTicketId(updated[updated.length - 1].id);
     } else {
@@ -237,78 +264,92 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
   // ─── Handle Booking Submission ────────────────────────────────────────────
   const handleBookAppointment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!customerName.trim() || !business) {
-      setFormError('لطفاً نام خود را وارد کنید.');
-      return;
-    }
+    return runAction('booking', async () => {
+      queueVersion.current++;
+      try {
+        if (catalogChecking || dateLoading || queueError || bookingDay?.is_closed) { setFormError(bookingDay?.reason || 'لطفاً تا تأیید وضعیت صف صبر کنید.'); return; }
+        if (!customerName.trim() || !business) {
+          setFormError('لطفاً نام خود را وارد کنید.');
+          return;
+        }
 
-    setSubmitting(true);
-    setFormError(null);
+        setSubmitting(true);
+        setFormError(null);
 
-    if (staffList.length > 0 && !selectedStaffId) { setFormError('لطفاً یک کارمند انتخاب کنید.'); return; }
-    const maxCapacity = staffList.find(st => st.id === selectedStaffId)?.max_daily_appointments ?? (staffList.length ? 20 : 0);
-    if (maxCapacity > 0 && dateAppointments.filter(a => (a.staff_id || '') === selectedStaffId && a.status !== 'cancelled').length >= maxCapacity) {
-      setFormError(`⚠️ تکمیل ظرفیت: سقف نوبت‌دهی این کارمند برای تاریخ ${isoToAfghaniDate(selectedDate)} (${maxCapacity} نوبت) تکمیل گردیده است.`);
-      setSubmitting(false);
-      return;
-    }
+        if (staffList.length > 0 && !selectedStaffId) { setSubmitting(false); setFormError('لطفاً یک کارمند انتخاب کنید.'); return; }
+        const maxCapacity = staffList.find(st => st.id === selectedStaffId)?.max_daily_appointments ?? (staffList.length ? 20 : 0);
+        if (maxCapacity > 0 && dateAppointments.filter(a => (a.staff_id || '') === selectedStaffId && a.status !== 'cancelled').length >= maxCapacity) {
+          setFormError(`⚠️ تکمیل ظرفیت: سقف نوبت‌دهی این کارمند برای تاریخ ${isoToAfghaniDate(selectedDate)} (${maxCapacity} نوبت) تکمیل گردیده است.`);
+          setSubmitting(false);
+          return;
+        }
 
-    const maxQueue = dateAppointments.length > 0 ? Math.max(...dateAppointments.map(a => a.queue_number)) : 0;
-    const newQueueNum = maxQueue + 1;
+        const maxQueue = dateAppointments.length > 0 ? Math.max(...dateAppointments.map(a => a.queue_number)) : 0;
+        const newQueueNum = maxQueue + 1;
 
-    const chosenStaff = staffList.find(st => st.id === selectedStaffId) || null;
+        const chosenStaff = staffList.find(st => st.id === selectedStaffId) || null;
 
-    const { appointment: newApp, error } = await createAppointment({
-      business_id: business.id,
-      service_id: selectedService?.id || null,
-      staff_id: chosenStaff?.id || null,
-      customer_name: customerName.trim(),
-      customer_phone: customerPhone.trim() || null,
-      queue_number: newQueueNum,
-      status: 'waiting',
-      estimated_wait_minutes: estimatedWaitTime,
-      appointment_date: selectedDate,
+        const { appointment: newApp, error } = await createAppointment({
+          business_id: business.id,
+          service_id: selectedService?.id || null,
+          staff_id: chosenStaff?.id || null,
+          customer_name: customerName.trim(),
+          customer_phone: customerPhone.trim() || null,
+          queue_number: newQueueNum,
+          status: 'waiting',
+          estimated_wait_minutes: estimatedWaitTime,
+          appointment_date: selectedDate,
+        });
+
+        if (error || !newApp) {
+          setFormError(error === 'BOOKING_CLOSED' ? 'پذیرش نوبت برای این روز بسته شده است.' : error === 'DAILY_CAPACITY_REACHED' ? 'ظرفیت این کارمند در این روز تکمیل شده است؛ کارمند یا روز دیگری انتخاب کنید.' : 'ثبت نوبت انجام نشد. لطفاً دوباره تلاش کنید.');
+        } else {
+          saveAppointmentToLocalStorage(business.id, newApp);
+          // Optimistic update — Real-Time will also fire but we update instantly
+          if (selectedDateRef.current === newApp.appointment_date) setAppointments(prev => [...prev.filter(row => row.id !== newApp.id), newApp]);
+          setShowBookingForm(false);
+          setCustomerName('');
+          setCustomerPhone('');
+          setActionAlert({ type: 'success', text: `نوبت شماره #${newApp.queue_number} برای ${isoToAfghaniDate(selectedDate)} با موفقیت ثبت شد.` });
+        }
+
+        setSubmitting(false);
+      } catch { setActionAlert({ type: 'error', text: 'عملیات کامل نشد؛ وضعیت نوبت را پیش از تلاش دوباره بررسی کنید.' }); }
+      finally { setSubmitting(false); queueVersion.current++; invalidateAppointmentReads(); if (businessRef.current) void loadAppointmentsForDate(businessRef.current.id, selectedDateRef.current); }
     });
-
-    if (error || !newApp) {
-      setFormError(error === 'DAILY_CAPACITY_REACHED' ? 'ظرفیت این کارمند در این روز تکمیل شده است؛ کارمند یا روز دیگری انتخاب کنید.' : 'ثبت نوبت انجام نشد. لطفاً دوباره تلاش کنید.');
-    } else {
-      saveAppointmentToLocalStorage(business.id, newApp);
-      // Optimistic update — Real-Time will also fire but we update instantly
-      setAppointments(prev => [...prev, newApp]);
-      setShowBookingForm(false);
-      setCustomerName('');
-      setCustomerPhone('');
-      setActionAlert({ type: 'success', text: `نوبت شماره #${newApp.queue_number} برای ${isoToAfghaniDate(selectedDate)} با موفقیت ثبت شد.` });
-    }
-
-    setSubmitting(false);
   };
 
   // ─── Cancel Appointment ───────────────────────────────────────────────────
   const handleCancelAppointment = async (appId: string, queueNum: number) => {
-    if (!business) return;
-    if (!confirm(`آیا از انصراف و حذف نوبت شماره #${queueNum} اطمینان دارید؟`)) return;
+    return runAction('cancel:' + appId, async () => {
+      queueVersion.current++;
+      try {
+        if (!business) return;
+        if (!confirm(`آیا از انصراف و حذف نوبت شماره #${queueNum} اطمینان دارید؟`)) return;
 
-    setCancellingId(appId);
-    const { success, error } = await deleteAppointment(appId);
-    if (!success) {
-      setActionAlert({ type: 'error', text: `خطا در حذف نوبت: لطفاً دوباره تلاش کنید.` });
-    } else {
-      removeAppointmentFromLocalStorage(business.id, appId);
-      setAppointments(prev => prev.filter(a => a.id !== appId));
-      setActionAlert({ type: 'success', text: `نوبت شماره #${queueNum} با موفقیت حذف شد.` });
-    }
-    setCancellingId(null);
+        setCancellingId(appId);
+        const { success, error } = await deleteAppointment(appId);
+        if (!success) {
+          setActionAlert({ type: 'error', text: `خطا در حذف نوبت: لطفاً دوباره تلاش کنید.` });
+        } else {
+          removeAppointmentFromLocalStorage(business.id, appId);
+          setAppointments(prev => prev.filter(a => a.id !== appId));
+          setActionAlert({ type: 'success', text: `نوبت شماره #${queueNum} با موفقیت حذف شد.` });
+        }
+        setCancellingId(null);
+      } catch { setActionAlert({ type: 'error', text: 'عملیات کامل نشد؛ وضعیت نوبت را پیش از تلاش دوباره بررسی کنید.' }); }
+      finally { setCancellingId(null); queueVersion.current++; invalidateAppointmentReads(); if (businessRef.current) void loadAppointmentsForDate(businessRef.current.id, selectedDateRef.current); }
+    });
   };
 
   // ─── Download Ticket Image ────────────────────────────────────────────────
-  const handleDownloadImage = () => {
+  const handleDownloadImage = async () => {
     if (!selectedAppointment || !business) return;
     const chosenService = services.find(s => s.id === selectedAppointment.service_id) || selectedAppointment.service || selectedService;
     const chosenStaff = staffList.find(s => s.id === selectedAppointment.staff_id) || selectedAppointment.staff;
     const aheadCount = queueAhead(dateAppointments, selectedAppointment.appointment_date, selectedAppointment.staff_id, selectedAppointment.queue_number);
     const avgDuration = chosenService ? chosenService.duration_minutes : 20;
+    const { downloadTicketImage } = await import('@/lib/ticketImage');
     downloadTicketImage({
       appointment: selectedAppointment,
       business: { name: business.name, description: business.description, phone: business.phone, address: business.address },
@@ -319,19 +360,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
     });
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="flex items-center gap-3 text-slate-500 text-sm font-medium">
-          <svg className="animate-spin h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-          </svg>
-          در حال بارگذاری اطلاعات...
-        </div>
-      </div>
-    );
-  }
+  if (loading) return <QueueSkeleton />;
 
   if (!business) {
     return (
@@ -356,7 +385,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
       <header className="bg-white border-b border-slate-200 sticky top-0 z-20 shadow-2xs">
         <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
-            <img src="/logo-transparent.png" alt="نوبتک" className="h-9 w-auto object-contain" />
+            <Image width={92} height={50} sizes="92px" src="/logo-transparent.png" alt="نوبتک" className="h-9 w-auto object-contain" />
           </Link>
           <div className="flex items-center gap-2">
             <span className="flex items-center gap-1.5 text-xs text-emerald-600 font-bold bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg">
@@ -473,6 +502,9 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
           </div>
         </div>
 
+        {(catalogChecking || dateLoading) && <p role="status" className="text-sm text-blue-700">در حال تأیید اطلاعات زنده…</p>}
+        {queueError && <div role="alert" className="rounded-xl bg-amber-50 p-3 text-sm">{queueError}<button type="button" className="mr-2 underline" onClick={() => { if (businessRef.current) void loadAppointmentsForDate(businessRef.current.id, selectedDateRef.current); }}>تلاش دوباره</button></div>}
+        {bookingDay?.is_closed && <p role="status" className="rounded-xl bg-rose-50 p-3 text-sm text-rose-800">پذیرش این روز بسته است. دلیل: {bookingDay.reason}</p>}
         {/* SCREEN A: Active Ticket View */}
         {!showBookingForm && selectedAppointment ? (
           <Card className="border-blue-200 bg-gradient-to-b from-blue-50/40 via-white to-white shadow-xl overflow-hidden">
@@ -483,7 +515,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
                   {myAppointments.map(app => (
                     <button
                       key={app.id}
-                      onClick={() => setActiveTicketId(app.id)}
+                      onClick={() => { setActiveTicketId(app.id); void handleDateChange(app.appointment_date); }}
                       className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                         activeTicketId === app.id ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                       }`}
@@ -556,7 +588,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
                   <Button
                     variant="outline"
                     onClick={() => handleCancelAppointment(selectedAppointment.id, selectedAppointment.queue_number)}
-                    isLoading={cancellingId === selectedAppointment.id}
+                    isLoading={cancellingId === selectedAppointment.id} disabled={pending.size > 0}
                     className="text-xs font-bold text-rose-600 border-rose-200 hover:bg-rose-50 py-2.5"
                   >
                     🗑️ انصراف و حذف این نوبت
@@ -661,7 +693,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
                   </div>
                 )}
 
-                <Button type="submit" size="lg" className="w-full mt-3 font-bold text-sm" isLoading={submitting} disabled={capacityFull || (staffList.length > 0 && !selectedStaffId)}>
+                <Button type="submit" size="lg" className="w-full mt-3 font-bold text-sm" isLoading={submitting} disabled={capacityFull || (staffList.length > 0 && !selectedStaffId) || catalogChecking || dateLoading || !!queueError || !!bookingDay?.is_closed || pending.size > 0}>
                   {capacityFull
                     ? 'ظرفیت نوبت‌دهی این روز تکمیل است'
                     : `تایید و دریافت شماره نوبت روز ${selectedDayInfo ? selectedDayInfo.dayName : isoToAfghaniDate(selectedDate)}`}

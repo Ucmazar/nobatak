@@ -1,8 +1,9 @@
+import { getTelegramConfig } from '@/lib/telegram/client';
 import { createAppointment } from '@/lib/services/appointments';
 import type { Appointment } from '@/types/database';
 export async function createPublicAppointment(input: Parameters<typeof createAppointment>[0]): Promise<{ appointment: Appointment | null; error: string | null }> {
   try {
-    const config = await fetch('/api/telegram/config').then(r => r.json());
+    const config = await getTelegramConfig();
     if (!config.enabled) return createAppointment(input);
     const response = await fetch('/api/booking', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
     const result = await response.json();

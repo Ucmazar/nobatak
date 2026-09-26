@@ -20,7 +20,7 @@ export async function getDashboardAccessReport(client: Client): Promise<Dashboar
     if (error || !user) return { ...report, access: 'login' };
     report.accountId = user.id;
     const { data: profile, error: profileError } = await client.from('profiles')
-      .select('*').eq('id', user.id).returns<Pick<Profile, 'role' | 'is_active' | 'max_businesses'>[]>().single();
+      .select('role,is_active,max_businesses').eq('id', user.id).returns<Pick<Profile, 'role' | 'is_active' | 'max_businesses'>[]>().single();
     if (profileError || !profile) return report;
     report.maxBusinesses = profile.max_businesses === undefined ? 1 : profile.max_businesses;
     report.userIsActive = profile.is_active !== false;

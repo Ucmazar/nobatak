@@ -1,5 +1,6 @@
 import { Appointment, AppointmentStatus, Staff } from '@/types/database';
-import { queueAhead } from '@/lib/queue';
+import { useMemo } from 'react';
+import { queuePositions } from '@/lib/queue';
 
 export function StaffAppointmentTables({ appointments, allAppointments, staff, pendingActions, onStatusChange, onDelete, onDownload }: {
   pendingActions: ReadonlySet<string>;
@@ -7,6 +8,7 @@ export function StaffAppointmentTables({ appointments, allAppointments, staff, p
   onStatusChange: (id: string, status: AppointmentStatus) => void;
   onDelete: (id: string) => void; onDownload: (appointment: Appointment) => void;
 }) {
+  const positions = useMemo(() => queuePositions(allAppointments), [allAppointments]);
   const groups = new Map<string, { name: string; rows: Appointment[] }>();
   for (const appointment of appointments) {
     const key = appointment.staff_id || 'unassigned';
@@ -22,7 +24,7 @@ export function StaffAppointmentTables({ appointments, allAppointments, staff, p
       <tbody>{[...group.rows].sort((a,b) => a.queue_number-b.queue_number).map(app => <tr key={app.id} className={app.status === 'serving' ? 'border-b border-slate-100 bg-blue-50' : 'border-b border-slate-100'}>
         <td className="p-3 font-bold">{app.queue_number.toLocaleString('fa-AF')}</td>
         <td className="p-3"><p className="font-semibold">{app.customer_name}</p><p className="text-xs text-slate-500">{app.service?.name || '—'}</p>{app.customer_phone && <p dir="ltr" className="text-right text-xs text-slate-500">{app.customer_phone}</p>}</td>
-        <td className="p-3">{app.status === 'waiting' ? queueAhead(allAppointments, app.appointment_date, app.staff_id, app.queue_number).toLocaleString('fa-AF') : '—'}</td>
+        <td className="p-3">{app.status === 'waiting' ? (positions.get(app.id) ?? 0).toLocaleString('fa-AF') : '—'}</td>
         <td className="p-3">{labels[app.status]}</td>
         <td className="p-3"><fieldset disabled={pendingActions.has("appointment:" + app.id)} aria-busy={pendingActions.has("appointment:" + app.id)} className="flex flex-wrap gap-2 text-xs disabled:opacity-60 [&:disabled_button]:cursor-wait">
           {app.status === 'waiting' && <button type="button" onClick={() => onStatusChange(app.id, 'serving')} className="rounded-lg bg-blue-600 px-3 py-2 text-white">شروع نوبت</button>}

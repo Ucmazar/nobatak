@@ -3,7 +3,21 @@ import { Appointment, AppointmentStatus } from '@/types/database';
 import { getKabulTodayISO } from '@/lib/afghaniMonths';
 import { isValidUUID } from '@/lib/utils';
 
-export async function getBusinessAppointments(businessId: string, date?: string, throwOnError = false): Promise<Appointment[]> {
+const pendingReads = new Map<string, Promise<Appointment[]>>();
+// No settled queue cache. Concurrent callers share only an in-flight database read.
+export function getBusinessAppointments(businessId: string, date?: string, throwOnError = false): Promise<Appointment[]> {
+  const key = JSON.stringify([businessId, date, throwOnError]);
+  const existing = pendingReads.get(key);
+  if (existing) return existing;
+  const request = fetchBusinessAppointments(businessId, date, throwOnError).finally(() => {
+    if (pendingReads.get(key) === request) pendingReads.delete(key);
+  });
+  pendingReads.set(key, request);
+  return request;
+}
+export function invalidateAppointmentReads() { pendingReads.clear(); }
+
+async function fetchBusinessAppointments(businessId: string, date?: string, throwOnError = false): Promise<Appointment[]> {
   try {
     let query = supabase.from('appointments')
       .select('*, service:services(*), staff:staff(*)')
@@ -37,6 +51,7 @@ export async function createAppointment(
   }
 ): Promise<{ appointment: Appointment | null; error: string | null }> {
   try {
+    invalidateAppointmentReads();
     const targetDate = appointmentData.appointment_date || getKabulTodayISO();
 
     const payload: any = {
@@ -63,6 +78,7 @@ export async function createAppointment(
       .single();
 
     if (error) {
+      if (error.message.includes('BOOKING_CLOSED')) return { appointment: null, error: 'BOOKING_CLOSED' };
       if (error.message.includes('DAILY_CAPACITY_REACHED')) return { appointment: null, error: 'DAILY_CAPACITY_REACHED' };
       return { appointment: null, error: error.message };
     }
@@ -74,8 +90,10 @@ export async function createAppointment(
 
 export async function updateAppointmentStatus(id: string, status: AppointmentStatus): Promise<{ success: boolean; error: string | null; warning?: string }> {
   try {
+    invalidateAppointmentReads();
     const response = await fetch('/api/appointments/status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, status }) });
     const result = await response.json();
+    invalidateAppointmentReads();
     if (!response.ok) return { success: false, error: result.error || 'ذخیرهٔ وضعیت نوبت انجام نشد.' };
     return result;
   } catch { return { success: false, error: 'ارتباط با سرور برقرار نشد.' }; }
@@ -83,10 +101,13 @@ export async function updateAppointmentStatus(id: string, status: AppointmentSta
 
 export async function deleteAppointment(id: string): Promise<{ success: boolean; error: string | null }> {
   try {
-    const { error } = await supabase
+    invalidateAppointmentReads();
+    const { data, error } = await supabase
       .from('appointments')
       .delete()
-      .eq('id', id);
+      .eq('id', id).select('id');
+    invalidateAppointmentReads();
+    if (!error && !data?.length) return { success: false, error: 'این نوبت حذف نشد یا دیگر در دسترس نیست.' };
 
     if (error) return { success: false, error: error.message };
     return { success: true, error: null };

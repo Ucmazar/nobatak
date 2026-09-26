@@ -1,7 +1,13 @@
 'use client';
 
+import Image from 'next/image';
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
+import { QueueSkeleton } from '@/components/ui/QueueSkeleton';
+import { createLiveRefresh } from '@/lib/live-refresh';
+import { overlayQueue, type PendingQueueChanges } from '@/lib/queue-mutations';
+import { DailyBookingControl } from '@/components/ui/DailyBookingControl';
 import { useRouter } from 'next/navigation';
 import type { DashboardAccessReport } from '@/lib/dashboard-access';
 import { supabase } from '@/lib/supabase/client';
@@ -11,8 +17,7 @@ import { getUserProfile, upsertUserProfile } from '@/lib/services/profile';
 import { getUserBusinesses, createBusiness, updateBusiness, deleteBusiness } from '@/lib/services/businesses';
 import { getBusinessServices, createService, updateService, deleteService } from '@/lib/services/services';
 import { getBusinessStaff, createStaff, updateStaff, deleteStaff } from '@/lib/services/staff';
-import { getBusinessAppointments, createAppointment, updateAppointmentStatus, deleteAppointment } from '@/lib/services/appointments';
-import { downloadTicketImage } from '@/lib/ticketImage';
+import { getBusinessAppointments, invalidateAppointmentReads, createAppointment, updateAppointmentStatus, deleteAppointment } from '@/lib/services/appointments';
 
 import { usePendingActions } from '@/lib/use-pending-actions';
 import { Button } from '@/components/ui/Button';
@@ -23,7 +28,7 @@ import { Modal } from '@/components/ui/Modal';
 import { QueueStatus } from '@/components/ui/QueueStatus';
 import { StaffAppointmentTables } from '@/components/ui/StaffAppointmentTables';
 import { queueAhead } from '@/lib/queue';
-import { BusinessQRCode } from '@/components/ui/BusinessQRCode';
+const BusinessQRCode = dynamic(() => import('@/components/ui/BusinessQRCode').then(module => module.BusinessQRCode), { loading: () => <p role="status">در حال آماده‌سازی برگه…</p> });
 import { AfghanDatePicker } from '@/components/ui/AfghanDatePicker';
 import { getUpcomingDaysAfghani, isoToAfghaniDate, getKabulTodayISO } from '@/lib/afghaniMonths';
 
@@ -96,6 +101,11 @@ export default function DashboardPage() {
 
   const [isAutoRefreshing, setIsAutoRefreshing] = useState(false);
 
+  const queueChanges = React.useRef<PendingQueueChanges>(new Map());
+  const queueRevision = React.useRef(0);
+  const appointmentsRef = React.useRef(appointments);
+  useEffect(() => { appointmentsRef.current = appointments; }, [appointments]);
+
   // Load ALL business data (services + staff + appointments). Used on initial load / business switch.
   const selectedDateRef = React.useRef<string>(todayStr);
   React.useEffect(() => { selectedDateRef.current = selectedDate; }, [selectedDate]);
@@ -107,6 +117,7 @@ export default function DashboardPage() {
   // Load ALL business data (services + staff + appointments). Used on initial load / business switch.
   const loadBusinessDetails = useCallback(async (businessId: string, date: string) => {
     if (!isValidUUID(businessId)) return;
+    const revision = queueRevision.current;
     try {
       const [srvData, stData, appData] = await Promise.all([
         getBusinessServices(businessId),
@@ -116,7 +127,7 @@ export default function DashboardPage() {
       if (selectedBusinessRef.current?.id !== businessId || selectedBusinessRef.current?.is_active === false) return;
       setServices(srvData);
       setStaffMembers(stData);
-      if (selectedDateRef.current === date) { setAppointments(appData); setDataError(null); }
+      if (selectedDateRef.current === date && revision === queueRevision.current) { setAppointments(overlayQueue(appData, queueChanges.current)); setDataError(null); }
     } catch (err) {
       if (selectedBusinessRef.current?.id === businessId && selectedDateRef.current === date) setDataError(err instanceof Error ? err.message : 'دریافت اطلاعات ممکن نشد. لطفاً دوباره تلاش کنید.');
     }
@@ -125,12 +136,14 @@ export default function DashboardPage() {
   // Load ONLY appointments for a date. Used on date switch — no full re-init.
   const loadAppointmentsOnly = useCallback(async (businessId: string, date: string) => {
     if (!isValidUUID(businessId)) return;
+    const revision = queueRevision.current;
+    setIsAutoRefreshing(true);
     try {
       const appData = await getBusinessAppointments(businessId, date, true);
-      if (selectedBusinessRef.current?.id === businessId && selectedBusinessRef.current?.is_active !== false && selectedDateRef.current === date) { setAppointments(appData); setDataError(null); }
+      if (selectedBusinessRef.current?.id === businessId && selectedBusinessRef.current?.is_active !== false && selectedDateRef.current === date && revision === queueRevision.current) { setAppointments(overlayQueue(appData, queueChanges.current)); setDataError(null); }
     } catch (err) {
       if (selectedBusinessRef.current?.id === businessId && selectedDateRef.current === date) setDataError(err instanceof Error ? err.message : 'دریافت نوبت‌ها ممکن نشد. اتصال اینترنت را بررسی کنید.');
-    }
+    } finally { if (selectedDateRef.current === date) setIsAutoRefreshing(false); }
   }, []);
 
   // Receive fresh business statuses and quota from the existing access poll.
@@ -217,44 +230,27 @@ export default function DashboardPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]); // selectedDate intentionally excluded — date changes handled by handleDateChange
 
-  // Realtime gives immediate updates; polling recovers missed events and disconnected sockets.
+  // Realtime first; low-frequency reconciliation covers missing publication/reconnects.
   const watchedBusinessId = selectedBusiness?.id;
   const watchedBusinessActive = selectedBusiness?.is_active !== false;
   useEffect(() => {
     if (!watchedBusinessId || !watchedBusinessActive) return;
-    let disposed = false;
-    let running = false;
-    let pending = false;
-    const refresh = async () => {
-      if (disposed || document.visibilityState === 'hidden') return;
-      if (running) { pending = true; return; }
-      running = true;
-      try {
-        do {
-          pending = false;
-          await loadAppointmentsOnly(watchedBusinessId, selectedDateRef.current);
-        } while (pending && !disposed);
-      } finally { running = false; }
-    };
+    const sync = createLiveRefresh(() => loadAppointmentsOnly(watchedBusinessId, selectedDateRef.current),
+      () => document.visibilityState !== 'hidden' && navigator.onLine);
     const channel = supabase.channel('dashboard:rt:' + watchedBusinessId)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments' }, payload => {
-        const row = payload.new as Partial<Appointment>;
-        // DELETE events may not contain business_id, so refresh the selected business.
-        if (!row.business_id || row.business_id === watchedBusinessId) void refresh();
-      })
-      .subscribe(status => { if (status === 'SUBSCRIBED') void refresh(); });
-    const timer = window.setInterval(() => { void refresh(); }, 3000);
-    const resume = () => { void refresh(); };
-    window.addEventListener('focus', resume);
-    window.addEventListener('online', resume);
-    document.addEventListener('visibilitychange', resume);
-    void refresh();
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'appointments', filter: 'business_id=eq.' + watchedBusinessId }, sync.request)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'appointments', filter: 'business_id=eq.' + watchedBusinessId }, sync.request)
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'appointments' }, payload => {
+        if (appointmentsRef.current.some(row => row.id === payload.old.id)) sync.request();
+      }).subscribe(sync.connection);
+    window.addEventListener('focus', sync.request);
+    window.addEventListener('online', sync.request);
+    document.addEventListener('visibilitychange', sync.request);
     return () => {
-      disposed = true;
-      window.clearInterval(timer);
-      window.removeEventListener('focus', resume);
-      window.removeEventListener('online', resume);
-      document.removeEventListener('visibilitychange', resume);
+      sync.close();
+      window.removeEventListener('focus', sync.request);
+      window.removeEventListener('online', sync.request);
+      document.removeEventListener('visibilitychange', sync.request);
       void supabase.removeChannel(channel);
     };
   }, [watchedBusinessId, watchedBusinessActive, loadAppointmentsOnly]);
@@ -302,7 +298,7 @@ export default function DashboardPage() {
         setBizSaving(true);
         setBizFormError(null);
 
-        let candidateSlug = bizSlug.trim() || trimmedName;
+        const candidateSlug = bizSlug.trim() || trimmedName;
         let cleanSlug = slugify(candidateSlug);
 
         if (!cleanSlug) {
@@ -581,39 +577,33 @@ export default function DashboardPage() {
     });
   };
 
-  // Appointment Operations
-  const handleStatusChange = async (id: string, newStatus: AppointmentStatus) => {
-    return runAction('appointment:' + id, async () => {
-      try {
-        const { success, error, warning } = await updateAppointmentStatus(id, newStatus);
-        if (!success) {
-          setAlertMsg({ type: 'error', text: `خطا در به روزرسانی وضعیت نوبت: لطفاً دوباره تلاش کنید.` });
-        } else {
-          setAppointments(previous => previous.map(a => a.id === id ? { ...a, status: newStatus } : a));
-          setAlertMsg({ type: warning ? 'error' : 'success', text: warning || 'وضعیت نوبت به روز شد.' });
-        }
-      } catch {
-        setAlertMsg({ type: 'error', text: 'عملیات انجام نشد. لطفاً دوباره تلاش کنید.' });
+  // Pending local changes are visible immediately, but only the server confirms success.
+  const mutateAppointment = async (id: string, change: AppointmentStatus | 'delete') => {
+    const original = appointmentsRef.current.find(row => row.id === id);
+    if (!original) return;
+    if (change === 'delete' && !confirm('آیا از حذف این نوبت اطمینان دارید؟')) return;
+    queueRevision.current++;
+    queueChanges.current.set(id, change);
+    setAppointments(previous => overlayQueue(previous, queueChanges.current));
+    let success = false;
+    try {
+      const result = change === 'delete' ? await deleteAppointment(id) : await updateAppointmentStatus(id, change);
+      success = result.success;
+      setAlertMsg({ type: success ? 'success' : 'error', text: success ? 'تغییر نوبت ذخیره شد.' : result.error || 'ذخیره انجام نشد؛ دوباره تلاش کنید.' });
+    } catch {
+      setAlertMsg({ type: 'error', text: 'ارتباط برقرار نشد؛ وضعیت نوبت دوباره بررسی می‌شود.' });
+    } finally {
+      queueChanges.current.delete(id);
+      queueRevision.current++;
+      invalidateAppointmentReads();
+      if (!success && selectedBusinessRef.current?.id === original.business_id && selectedDateRef.current === original.appointment_date) {
+        setAppointments(previous => [...previous.filter(row => row.id !== id), original].sort((a,b) => a.queue_number - b.queue_number));
       }
-    });
+      void loadAppointmentsOnly(original.business_id, original.appointment_date);
+    }
   };
-
-  const handleDeleteAppointmentItem = async (appId: string) => {
-    return runAction('appointment:' + appId, async () => {
-      try {
-        if (!confirm('آیا از حذف این نوبت اطمینان دارید؟')) return;
-        const { success, error } = await deleteAppointment(appId);
-        if (success) {
-          setAppointments(previous => previous.filter(a => a.id !== appId));
-          setAlertMsg({ type: 'success', text: 'نوبت حذف شد.' });
-        } else {
-          setAlertMsg({ type: 'error', text: `خطا در حذف نوبت: لطفاً دوباره تلاش کنید.` });
-        }
-      } catch {
-        setAlertMsg({ type: 'error', text: 'عملیات انجام نشد. لطفاً دوباره تلاش کنید.' });
-      }
-    });
-  };
+  const handleStatusChange = (id: string, status: AppointmentStatus) => runAction('appointment:' + id, () => mutateAppointment(id, status));
+  const handleDeleteAppointmentItem = (id: string) => runAction('appointment:' + id, () => mutateAppointment(id, 'delete'));
 
   // Download ticket image for walk-in appointment from Owner Dashboard
   const handleOwnerDownloadTicket = (app: Appointment) => {
@@ -625,6 +615,7 @@ export default function DashboardPage() {
         const aheadCount = queueAhead(appointments, app.appointment_date, app.staff_id, app.queue_number);
         const duration = srv ? srv.duration_minutes : 20;
 
+        const { downloadTicketImage } = await import('@/lib/ticketImage');
         downloadTicketImage({
           appointment: app,
           business: {
@@ -719,19 +710,7 @@ export default function DashboardPage() {
     return a.status === appointmentFilter;
   });
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="flex items-center gap-3 text-slate-500 text-sm font-medium">
-          <svg className="animate-spin h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-          </svg>
-          در حال آماده‌سازی داشبورد…
-        </div>
-      </div>
-    );
-  }
+  if (loading) return <QueueSkeleton />;
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
@@ -740,7 +719,7 @@ export default function DashboardPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link href="/" className="flex items-center gap-2">
-              <img src="/logo-transparent.png" alt="نوبتک" className="h-10 w-auto object-contain" />
+              <Image src="/logo-transparent.png" width={184} height={100} sizes="(max-width: 640px) 92px, 184px" alt="نوبتک" className="h-10 w-auto object-contain" />
             </Link>
 
             {/* <span className="flex items-center gap-1.5 text-xs text-emerald-600 font-bold bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg hidden sm:inline-flex">
@@ -971,6 +950,11 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
+                {selectedBusiness && <DailyBookingControl key={selectedBusiness.id} businessId={selectedBusiness.id} onChanged={() => {
+                  queueRevision.current++; invalidateAppointmentReads();
+                  void loadAppointmentsOnly(selectedBusiness.id, selectedDateRef.current);
+                }} />}
+                {pending.size > 0 && <p role="status" className="text-sm text-blue-700">در حال ثبت تغییرات…</p>}
                 {/* Capacity Status Banner */}
 
 

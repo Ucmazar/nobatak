@@ -1,14 +1,13 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { getTelegramConfig, createTelegramBundle } from '@/lib/telegram/client';
 export function TelegramButton({ appointmentId, appointmentIds = [appointmentId] }: { appointmentId: string; appointmentIds?: string[] }) {
   const idsKey = [...new Set(appointmentIds)].sort().join(',');
   const [state, setState] = useState({ id: '', link: '', message: 'در حال بررسی امکان اطلاع‌رسانی…' });
   useEffect(() => {
     let disposed = false;
     Promise.resolve().then(async () => {
-      const response = await fetch('/api/telegram/config', { cache: 'no-store' });
-      if (!response.ok) throw new Error('Unavailable');
-      const config = await response.json();
+      const config = await getTelegramConfig();
       let token: string | null = null;
       try { token = localStorage.getItem('nobatak_ticket_' + appointmentId); } catch { /* Browser storage unavailable. */ }
       let bundleLink = '';
@@ -19,10 +18,8 @@ export function TelegramButton({ appointmentId, appointmentIds = [appointmentId]
           if (saved) tokens.push(saved);
         }
         if (tokens.length > 1) {
-          const bundleResponse = await fetch('/api/telegram/bundle', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tokens }) });
-          const bundle = await bundleResponse.json();
-          if (!bundleResponse.ok) { if (!disposed) setState({ id: idsKey, link: '', message: bundle.error || 'اتصال همهٔ نوبت‌ها انجام نشد.' }); return; }
-          bundleLink = bundle.link;
+          bundleLink = await createTelegramBundle(tokens);
+
         }
       }
       if (!disposed) setState({ id: idsKey,

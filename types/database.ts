@@ -82,10 +82,19 @@ export interface Appointment {
 export interface Database {
   public: {
     Views: { [_ in never]: never }
-    Functions: { [_ in never]: never }
+    Functions: {
+      set_business_day_booking: { Args: { p_business: string; p_closed: boolean; p_reason: string; p_cancel_today: boolean; p_request: string }; Returns: Json };
+      daily_notice_summary: { Args: { p_business: string }; Returns: Json };
+    }
     Enums: { [_ in never]: never }
     CompositeTypes: { [_ in never]: never }
     Tables: {
+      business_day_closures: {
+        Row: { business_id: string; booking_date: string; is_closed: boolean; reason: string; updated_at: string };
+        Insert: { business_id: string; booking_date: string; is_closed: boolean; reason: string };
+        Update: { is_closed?: boolean; reason?: string };
+        Relationships: [];
+      };
       profiles: {
         Row: { [K in keyof Profile]: Profile[K] }
         Relationships: []

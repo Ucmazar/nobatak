@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import { ReactNode } from 'react';
 import Link from 'next/link';
 import { AdminLogoutButton } from '@/components/ui/AdminLogoutButton';
@@ -10,7 +11,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center space-x-4 space-x-reverse">
             <Link href="/" className="flex items-center gap-2">
-              <img src="/logo-transparent.png" alt="نوبتک" className="h-10 w-auto object-contain " />
+              <Image src="/logo-transparent.png" width={184} height={100} sizes="(max-width: 640px) 92px, 184px" alt="نوبتک" className="h-10 w-auto object-contain " />
             </Link>
             <div>
               <span className="font-bold text-lg text-white">نوبتک</span>

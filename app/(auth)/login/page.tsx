@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -64,7 +65,7 @@ export default function LoginPage() {
         {/* Logo Branding */}
         <div className="text-center space-y-2">
           <Link href="/" className="inline-flex items-center gap-2.5">
-            <img src="/logo-transparent.png" alt="نوبتک" className="h-12 w-auto object-contain mx-auto" />
+            <Image src="/logo-transparent.png" width={184} height={100} sizes="(max-width: 640px) 92px, 184px" alt="نوبتک" className="h-12 w-auto object-contain mx-auto" />
           </Link>
           <p className="text-xs text-slate-500">ورود به پنل مدیریت نوبت‌دهی</p>
         </div>

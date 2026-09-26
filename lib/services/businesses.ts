@@ -18,7 +18,7 @@ export async function getUserBusinesses(ownerId: string): Promise<Business[]> {
   }
 }
 
-export async function getBusinessBySlug(slug: string): Promise<Business | null> {
+export async function getBusinessBySlug(slug: string, throwOnError = false): Promise<Business | null> {
   try {
     let decodedSlug = slug;
     try {
@@ -30,23 +30,25 @@ export async function getBusinessBySlug(slug: string): Promise<Business | null> 
 
     console.log('[getBusinessBySlug] Searching for slug:', JSON.stringify(trimmedSlug));
 
-    const { data: slugData } = await supabase
+    const { data: slugData, error: slugError } = await supabase
       .from('businesses')
       .select('*')
       .ilike('slug', trimmedSlug)
       .maybeSingle();
 
+    if (slugError) throw slugError;
     if (slugData && slugData.is_active !== false) {
       console.log('[getBusinessBySlug] Found by slug:', slugData.name);
       return slugData;
     }
 
     if (isValidUUID(trimmedSlug)) {
-      const { data: idData } = await supabase
+      const { data: idData, error: idError } = await supabase
         .from('businesses')
         .select('*')
         .eq('id', trimmedSlug)
         .maybeSingle();
+      if (idError) throw idError;
       if (idData && idData.is_active !== false) {
         console.log('[getBusinessBySlug] Found by id:', idData.name);
         return idData;
@@ -57,6 +59,7 @@ export async function getBusinessBySlug(slug: string): Promise<Business | null> 
     return null;
   } catch (err) {
     console.error('Error fetching business by slug:', err);
+    if (throwOnError) throw err;
     return null;
   }
 }
