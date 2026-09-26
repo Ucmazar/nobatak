@@ -360,7 +360,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
     });
   };
 
-  if (loading) return <QueueSkeleton />;
+  if (loading || catalogChecking || dateLoading) return <QueueSkeleton />;
 
   if (!business) {
     return (
@@ -372,6 +372,17 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
           <Link href="/" className="inline-block mt-6"><Button>بازگشت به صفحه اصلی</Button></Link>
         </Card>
       </div>
+    );
+  }
+
+  if (bookingDay?.is_closed) {
+    return (
+      <main dir="rtl" className="min-h-screen bg-slate-50 flex items-center justify-center p-6 font-sans">
+        <section role="status" aria-live="polite" className="w-full max-w-md rounded-3xl border border-rose-200 bg-white p-8 text-center shadow-sm">
+          <h1 className="text-xl font-bold text-rose-900">پذیرش این روز بسته است</h1>
+          <p className="mt-4 whitespace-pre-wrap break-words text-base leading-8 text-slate-700">دلیل: {bookingDay.reason}</p>
+        </section>
+      </main>
     );
   }
 
@@ -504,7 +515,6 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
 
         {(catalogChecking || dateLoading) && <p role="status" className="text-sm text-blue-700">در حال تأیید اطلاعات زنده…</p>}
         {queueError && <div role="alert" className="rounded-xl bg-amber-50 p-3 text-sm">{queueError}<button type="button" className="mr-2 underline" onClick={() => { if (businessRef.current) void loadAppointmentsForDate(businessRef.current.id, selectedDateRef.current); }}>تلاش دوباره</button></div>}
-        {bookingDay?.is_closed && <p role="status" className="rounded-xl bg-rose-50 p-3 text-sm text-rose-800">پذیرش این روز بسته است. دلیل: {bookingDay.reason}</p>}
         {/* SCREEN A: Active Ticket View */}
         {!showBookingForm && selectedAppointment ? (
           <Card className="border-blue-200 bg-gradient-to-b from-blue-50/40 via-white to-white shadow-xl overflow-hidden">
