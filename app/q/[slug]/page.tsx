@@ -71,7 +71,15 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [actionAlert, setActionAlert] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  const myAppointmentsRef = useRef<Appointment[]>([]);
+  useEffect(() => { myAppointmentsRef.current = myAppointments; }, [myAppointments]);
   useEffect(() => { appointmentsRef.current = appointments; }, [appointments]);
+  const readSavedTickets = async (bizId: string, ids: string[]): Promise<Appointment[]> => {
+    if (!ids.length) return [];
+    const { data, error } = await supabase.from('appointments').select('*, service:services(*), staff:staff(*)').eq('business_id', bizId).in('id', ids);
+    if (error) throw error;
+    return (data || []) as unknown as Appointment[];
+  };
   useEffect(() => { void getTelegramConfig().catch(() => {}); }, []);
 
   // ─── Keep refs in sync ────────────────────────────────────────────────────
@@ -82,11 +90,13 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
     const version = queueVersion.current;
     try {
       const [appData, day] = await Promise.all([getBusinessAppointments(bizId, date, true), getBookingDay(bizId, date)]);
+      const savedIds = myAppointmentsRef.current.map(item => item.id);
+      const savedRows = await readSavedTickets(bizId, savedIds);
       if (businessRef.current?.id !== bizId || queueVersion.current !== version) return appData;
       if (selectedDateRef.current === date) { setAppointments(appData); setBookingDay(day); setQueueError(null); }
       setMyAppointments(previous => previous.flatMap(item => {
-        if (item.appointment_date !== date) return [item];
-        const live = appData.find(row => row.id === item.id);
+        if (!savedIds.includes(item.id)) return [item];
+        const live = savedRows.find(row => row.id === item.id);
         return live && ['waiting','serving'].includes(live.status) ? [live] : [];
       }));
       return appData;
@@ -148,17 +158,15 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
             history.replaceState(null, '', window.location.pathname + window.location.search);
           } else setActionAlert({ type: 'error', text: 'لینک نوبت معتبر نیست یا نوبت دیگر موجود نیست.' });
         }
-        const dates = [...new Set(saved.map(item => item.appointment_date).filter(date => date && date !== todayStr))];
-        const otherDays = await Promise.all(dates.map(date => getBusinessAppointments(bizData.id, date, true)));
+        const recovered = await readSavedTickets(bizData.id, saved.map(item => item.id));
         if (disposed) return;
-        const liveRows = [...appData, ...otherDays.flat()];
-        const valid = saved.flatMap(item => { const live = liveRows.find(row => row.id === item.id); return live && ['waiting','serving'].includes(live.status) ? [live] : []; });
+        const valid = recovered.filter(item => ['waiting','serving'].includes(item.status));
         setMyAppointments(valid); try { localStorage.setItem(storageKey, JSON.stringify(valid)); } catch { /* Keep tickets in memory. */ }
         const active = linked && valid.find(item => item.id === linked!.id) || valid[valid.length - 1];
         if (active) {
           setActiveTicketId(active.id); setShowBookingForm(window.location.hash === '#book');
           setSelectedDate(active.appointment_date); selectedDateRef.current = active.appointment_date;
-          setAppointments(liveRows.filter(item => item.appointment_date === active.appointment_date));
+          setAppointments(active.appointment_date === todayStr ? appData : await getBusinessAppointments(bizData.id, active.appointment_date, true));
           setBookingDay(await getBookingDay(bizData.id, active.appointment_date));
         } else setShowBookingForm(true);
 
@@ -230,7 +238,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
   const selectedService = services.find(s => s.id === selectedServiceId) || services[0] || null;
   const serviceDuration = selectedService ? selectedService.duration_minutes : 20;
 
-  const selectedAppointment = myAppointments.find(a => a.id === activeTicketId) || myAppointments[0] || null;
+  const selectedAppointment = myAppointments.find(a => a.id === activeTicketId && a.appointment_date === selectedDate) || myAppointments.find(a => a.appointment_date === selectedDate) || null;
   const peopleAheadCount = selectedAppointment
     ? queueAhead(dateAppointments, selectedAppointment.appointment_date, selectedAppointment.staff_id, selectedAppointment.queue_number)
     : 0;
@@ -360,7 +368,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
     });
   };
 
-  if (loading || catalogChecking || dateLoading) return <QueueSkeleton />;
+  if (loading || catalogChecking) return <QueueSkeleton />;
 
   if (!business) {
     return (
@@ -372,17 +380,6 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
           <Link href="/" className="inline-block mt-6"><Button>بازگشت به صفحه اصلی</Button></Link>
         </Card>
       </div>
-    );
-  }
-
-  if (bookingDay?.is_closed) {
-    return (
-      <main dir="rtl" className="min-h-screen bg-slate-50 flex items-center justify-center p-6 font-sans">
-        <section role="status" aria-live="polite" className="w-full max-w-md rounded-3xl border border-rose-200 bg-white p-8 text-center shadow-sm">
-          <h1 className="text-xl font-bold text-rose-900">پذیرش این روز بسته است</h1>
-          <p className="mt-4 whitespace-pre-wrap break-words text-base leading-8 text-slate-700">دلیل: {bookingDay.reason}</p>
-        </section>
-      </main>
     );
   }
 
@@ -486,6 +483,15 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
           </div>
         </div>
 
+        {dateLoading ? <p role="status" className="p-4 text-blue-700">در حال بررسی پذیرش روز انتخاب‌شده…</p> : queueError ? (
+          <div role="alert" className="rounded-xl bg-amber-50 p-4">{queueError}<button type="button" className="mr-2 underline" onClick={() => { if (businessRef.current) void loadAppointmentsForDate(businessRef.current.id, selectedDateRef.current); }}>تلاش دوباره</button></div>
+        ) : bookingDay?.is_closed ? (
+          <section role="status" className="rounded-2xl border border-rose-200 bg-white p-8 text-center">
+            <h2 className="text-xl font-bold text-rose-900">پذیرش این روز بسته است</h2>
+            <p className="mt-3 whitespace-pre-wrap break-words text-slate-700">دلیل: {bookingDay.reason}</p>
+            <p className="mt-3 text-sm text-slate-500">برای دریافت نوبت، روز دیگری انتخاب کنید.</p>
+          </section>
+        ) : <>
         {/* Live Queue Summary Cards */}
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-white rounded-2xl border border-blue-200 p-4 text-center shadow-xs">
@@ -513,8 +519,6 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
           </div>
         </div>
 
-        {(catalogChecking || dateLoading) && <p role="status" className="text-sm text-blue-700">در حال تأیید اطلاعات زنده…</p>}
-        {queueError && <div role="alert" className="rounded-xl bg-amber-50 p-3 text-sm">{queueError}<button type="button" className="mr-2 underline" onClick={() => { if (businessRef.current) void loadAppointmentsForDate(businessRef.current.id, selectedDateRef.current); }}>تلاش دوباره</button></div>}
         {/* SCREEN A: Active Ticket View */}
         {!showBookingForm && selectedAppointment ? (
           <Card className="border-blue-200 bg-gradient-to-b from-blue-50/40 via-white to-white shadow-xl overflow-hidden">
@@ -712,6 +716,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
             </CardContent>
           </Card>
         )}
+        </>}
       </main>
 
       <footer className="mt-auto border-t border-slate-200 py-6 text-center text-xs text-slate-400">

@@ -5,6 +5,7 @@ import { dispatchDailyNotices } from '@/lib/telegram/daily-notices';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
+const validDate = (value: unknown): value is string => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { 'Cache-Control': 'no-store, private' } });
 
@@ -17,7 +18,8 @@ export async function GET(request: Request) {
     if (!user) return json({ error: 'ورود لازم است.' }, 401);
     const { data: notices, error } = await client.rpc('daily_notice_summary', { p_business: businessId });
     if (error) return json({ error: error.code === '42501' ? 'دسترسی مجاز نیست.' : 'تنظیم توقف روزانه هنوز در دیتابیس نصب نشده یا در دسترس نیست.' }, error.code === '42501' ? 403 : 503);
-    const date = getKabulTodayISO();
+    const date = new URL(request.url).searchParams.get('date') || getKabulTodayISO();
+    if (!validDate(date)) return json({ error: 'تاریخ معتبر نیست.' }, 400);
     const { data: day, error: dayError } = await client.from('business_day_closures').select('is_closed,reason,booking_date').eq('business_id', businessId).eq('booking_date', date).maybeSingle();
     if (dayError) return json({ error: 'دریافت وضعیت امروز انجام نشد.' }, 503);
     return json({ day: day || { is_closed: false, reason: '', booking_date: date }, notices });
@@ -38,14 +40,22 @@ export async function POST(request: Request) {
       after(() => dispatchDailyNotices(body.businessId).catch(() => { console.error('Cancellation outbox unavailable'); }));
       return json({ success: true });
     }
-    if (typeof body.closed !== 'boolean' || typeof body.cancelToday !== 'boolean' || !uuid.test(body.requestId || '') || typeof body.reason !== 'string' || body.reason.length > 500 || ((body.closed || body.cancelToday) && body.reason.trim().length < 3)) {
-      return json({ error: 'برای توقف یا لغو نوبت‌های امروز، دلیل حداقل سه حرفی وارد کنید.' }, 400);
+    if (typeof body.closed !== 'boolean' || !validDate(body.date) || !uuid.test(body.requestId || '') || typeof body.reason !== 'string' || body.reason.length > 500 || (body.closed && body.reason.trim().length < 3)) {
+      return json({ error: 'برای بستن پذیرش این روز، دلیل حداقل سه حرفی وارد کنید.' }, 400);
     }
-    const { data, error } = await client.rpc('set_business_day_booking', {
+    const { data, error } = await client.rpc('set_business_day_with_transfer', {
       p_business: body.businessId, p_closed: body.closed, p_reason: body.reason.trim(),
-      p_cancel_today: body.cancelToday, p_request: body.requestId,
+      p_date: body.date, p_request: body.requestId,
     });
-    if (error) return json({ error: error.code === '42501' ? 'دسترسی مجاز نیست.' : 'تغییر انجام نشد؛ تنظیمات دیتابیس و دلیل واردشده را بررسی کنید.' }, error.code === '42501' ? 403 : 409);
+    if (error) {
+      const message = error.code === '42501' ? 'دسترسی مجاز نیست.'
+        : error.message.includes('NO_AVAILABLE_DAY') ? 'تا یک سال آینده روز باز با ظرفیت کافی یافت نشد؛ هیچ تغییری انجام نشد.'
+        : /TRANSFER_CAPACITY_CONFLICT|DAILY_CAPACITY_REACHED/.test(error.message) ? 'ظرفیت روز مقصد با نوبت‌های تکمیل‌شده یا تعداد انتقال سازگار نیست؛ هیچ تغییری انجام نشد.'
+        : /INVALID_STAFF|STAFF_REQUIRED/.test(error.message) ? 'کارمند یکی از نوبت‌ها فعال نیست؛ ابتدا آن را اصلاح کنید. هیچ نوبتی منتقل نشد.'
+        : error.message.includes('PAST_DATE') ? 'تاریخ گذشته قابل تغییر نیست.'
+        : 'تغییر انجام نشد؛ فایل booking_day_transfer.sql و تنظیمات دیتابیس را بررسی کنید.';
+      return json({ error: message }, error.code === '42501' ? 403 : 409);
+    }
     after(() => dispatchDailyNotices(body.businessId).catch(() => { console.error('Cancellation outbox dispatch failed; notices remain pending'); }));
     return json({ success: true, result: data });
   } catch { return json({ error: 'پاسخ دریافت نشد؛ وضعیت را بررسی و در صورت نیاز دوباره تلاش کنید.' }, 503); }

@@ -950,7 +950,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                {selectedBusiness && <DailyBookingControl key={selectedBusiness.id} businessId={selectedBusiness.id} onChanged={() => {
+                {selectedBusiness && <DailyBookingControl key={selectedBusiness.id + selectedDate} businessId={selectedBusiness.id} date={selectedDate} onChanged={() => {
                   queueRevision.current++; invalidateAppointmentReads();
                   void loadAppointmentsOnly(selectedBusiness.id, selectedDateRef.current);
                 }} />}

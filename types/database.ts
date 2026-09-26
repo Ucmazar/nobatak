@@ -83,6 +83,7 @@ export interface Database {
   public: {
     Views: { [_ in never]: never }
     Functions: {
+      set_business_day_with_transfer: { Args: { p_business: string; p_date: string; p_closed: boolean; p_reason: string; p_request: string }; Returns: Json };
       set_business_day_booking: { Args: { p_business: string; p_closed: boolean; p_reason: string; p_cancel_today: boolean; p_request: string }; Returns: Json };
       daily_notice_summary: { Args: { p_business: string }; Returns: Json };
     }
