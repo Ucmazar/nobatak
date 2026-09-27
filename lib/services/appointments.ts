@@ -79,6 +79,7 @@ export async function createAppointment(
 
     if (error) {
       if (error.message.includes('BOOKING_CLOSED')) return { appointment: null, error: 'BOOKING_CLOSED' };
+      if (error.message.includes('BUSINESS_DAILY_CAPACITY_REACHED')) return { appointment: null, error: 'ظرفیت روزانهٔ پلن کسب‌وکار تکمیل شده است؛ روز دیگری انتخاب کنید.' };
       if (error.message.includes('DAILY_CAPACITY_REACHED')) return { appointment: null, error: 'DAILY_CAPACITY_REACHED' };
       return { appointment: null, error: error.message };
     }

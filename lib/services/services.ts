@@ -1,3 +1,4 @@
+import { planErrorMessage } from '@/lib/plans';
 import { supabase } from '@/lib/supabase/client';
 import { Service } from '@/types/database';
 
@@ -35,7 +36,7 @@ export async function createService(
       .select()
       .single();
 
-    if (error) return { service: null, error: error.message };
+    if (error) return { service: null, error: planErrorMessage(error.message) };
     return { service: data, error: null };
   } catch (err: any) {
     return { service: null, error: err.message || 'خطا در ثبت خدمت' };
@@ -54,7 +55,7 @@ export async function updateService(
       .select()
       .single();
 
-    if (error) return { service: null, error: error.message };
+    if (error) return { service: null, error: planErrorMessage(error.message) };
     return { service: data, error: null };
   } catch (err: any) {
     return { service: null, error: err.message || 'خطا در ویرایش خدمت' };
@@ -68,7 +69,7 @@ export async function deleteService(id: string): Promise<{ success: boolean; err
       .delete()
       .eq('id', id);
 
-    if (error) return { success: false, error: error.message };
+    if (error) return { success: false, error: planErrorMessage(error.message) };
     return { success: true, error: null };
   } catch (err: any) {
     return { success: false, error: err.message };

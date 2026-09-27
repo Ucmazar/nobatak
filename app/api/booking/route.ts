@@ -18,7 +18,7 @@ export async function POST(request: Request) {
     if (checks[0].error || checks[0].data !== true) return Response.json({ error: 'ثبت نوبت هنوز آماده نیست.' }, { status: 503 });
     if (checks.slice(1).some(check => check.error || !check.data)) return Response.json({ error: 'کسب‌وکار، خدمت یا کارمند در دسترس نیست.' }, { status: 400 });
     const { data: appointment, error } = await db.from('appointments').insert({ business_id: data.business_id, customer_name: data.customer_name.trim(), customer_phone: data.customer_phone || null, service_id: data.service_id || null, staff_id: data.staff_id || null, appointment_date: data.appointment_date, status: 'waiting', queue_number: 1, estimated_wait_minutes: 0 }).select('*,service:services(*),staff:staff(*)').single();
-    if (error) return Response.json({ error: error.message.includes('BOOKING_CLOSED') ? 'BOOKING_CLOSED' : error.message.includes('DAILY_CAPACITY_REACHED') ? 'DAILY_CAPACITY_REACHED' : 'ثبت نوبت انجام نشد. لطفاً دوباره تلاش کنید.' }, { status: 409 });
+    if (error) return Response.json({ error: error.message.includes('BOOKING_CLOSED') ? 'BOOKING_CLOSED' : error.message.includes('BUSINESS_DAILY_CAPACITY_REACHED') ? 'BUSINESS_DAILY_CAPACITY_REACHED' : error.message.includes('DAILY_CAPACITY_REACHED') ? 'DAILY_CAPACITY_REACHED' : 'ثبت نوبت انجام نشد. لطفاً دوباره تلاش کنید.' }, { status: 409 });
     // Tokens are issued only for a row created by this request, never by supplying another row ID.
     return Response.json({ appointment, ticketToken: botReady() ? signTicket(appointment.id, process.env.TELEGRAM_BOT_TOKEN!) : null });
   } catch { return Response.json({ error: 'ثبت نوبت انجام نشد.' }, { status: 500 }); }

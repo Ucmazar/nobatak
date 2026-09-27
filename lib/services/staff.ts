@@ -1,3 +1,4 @@
+import { planErrorMessage } from '@/lib/plans';
 import { supabase } from '@/lib/supabase/client';
 import { Staff } from '@/types/database';
 
@@ -35,7 +36,7 @@ export async function createStaff(
       .select()
       .single();
 
-    if (error) return { staff: null, error: error.message };
+    if (error) return { staff: null, error: planErrorMessage(error.message) };
     return { staff: data, error: null };
   } catch (err: any) {
     return { staff: null, error: err.message || 'خطا در افزودن کارمند' };
@@ -54,7 +55,7 @@ export async function updateStaff(
       .select()
       .single();
 
-    if (error) return { staff: null, error: error.message };
+    if (error) return { staff: null, error: planErrorMessage(error.message) };
     return { staff: data, error: null };
   } catch (err: any) {
     return { staff: null, error: err.message || 'خطا در ویرایش کارمند' };
@@ -68,7 +69,7 @@ export async function deleteStaff(id: string): Promise<{ success: boolean; error
       .delete()
       .eq('id', id);
 
-    if (error) return { success: false, error: error.message };
+    if (error) return { success: false, error: planErrorMessage(error.message) };
     return { success: true, error: null };
   } catch (err: any) {
     return { success: false, error: err.message };

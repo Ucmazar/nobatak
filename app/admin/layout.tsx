@@ -30,7 +30,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <nav className="admin-navigation" aria-label="بخش‌های مدیریت"><Link href="/admin">نمای کلی و حساب‌ها</Link><Link href="/admin/telegram">تنظیمات تلگرام</Link><Link href="/">مشاهدهٔ سایت</Link></nav>
+      <nav className="admin-navigation" aria-label="بخش‌های مدیریت"><Link href="/admin">نمای کلی و حساب‌ها</Link><Link href="/admin/plans">مدیریت پلن‌ها</Link><Link href="/admin/telegram">تنظیمات تلگرام</Link><Link href="/">مشاهدهٔ سایت</Link></nav>
       {/* Main Container */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {children}
