@@ -112,6 +112,8 @@ export async function updateBusiness(
     if (error) {
       if (error.message.includes('opening_time') || error.message.includes('closing_time')) return { business: null, error: 'تنظیم ساعت کاری هنوز در پایگاه داده تکمیل نشده است.' };
       if (error.message.includes('max_daily_appointments')) return { business: null, error: 'تنظیم ظرفیت هنوز در پایگاه داده تکمیل نشده است.' };
+      if (error.message.includes('max_active_appointments_per_device')) return { business: null, error: 'ابتدا فایل device_booking_limits.sql را در Supabase اجرا کنید.' };
+      if (error.message.includes('no_show_grace_minutes')) return { business: null, error: 'ابتدا فایل device_booking_limits.sql را در Supabase اجرا کنید.' };
       return { business: null, error: error.message };
     }
     return { business: data, error: null };

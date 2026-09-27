@@ -37,6 +37,8 @@ export interface Business {
   opening_time?: string | null
   closing_time?: string | null
   max_daily_appointments?: number
+  max_active_appointments_per_device?: number | null
+  no_show_grace_minutes?: number
   is_active?: boolean
   created_at: string
   updated_at: string
@@ -71,6 +73,7 @@ export interface Appointment {
   service_id?: string | null
   staff_id?: string | null
   customer_name: string
+  booking_device_id?: string | null
   customer_phone?: string | null
   queue_number: number
   status: AppointmentStatus

@@ -24,6 +24,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Badge } from '@/components/ui/Badge';
 import { AfghanDatePicker } from '@/components/ui/AfghanDatePicker';
 import { getUpcomingDaysAfghani, isoToAfghaniDate, getKabulTodayISO } from '@/lib/afghaniMonths';
+import { getBookingDeviceId, normalizeBookingName } from '@/lib/booking-device';
 
 interface PublicBookingPageProps {
   params: Promise<{ slug: string }>;
@@ -282,7 +283,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
       try {
         if (catalogChecking || dateLoading || queueError || bookingDay?.is_closed) { setFormError(bookingDay?.reason || 'لطفاً تا تأیید وضعیت صف صبر کنید.'); return; }
         if (!customerName.trim() || !business) {
-          setFormError('لطفاً نام خود را وارد کنید.');
+          setFormError('لطفاً نام مراجعه‌کننده را وارد کنید.');
           return;
         }
 
@@ -291,6 +292,11 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
 
         if (businessCapacityFull) { setSubmitting(false); setFormError('ظرفیت روزانهٔ کسب‌وکار تکمیل شده است؛ روز دیگری انتخاب کنید.'); return; }
         if (staffList.length > 0 && !selectedStaffId) { setSubmitting(false); setFormError('لطفاً یک کارمند انتخاب کنید.'); return; }
+        const activeMine = myAppointments.filter(item => ['waiting', 'serving'].includes(item.status));
+        const deviceLimit = business.max_active_appointments_per_device ?? 3;
+        if (business.max_active_appointments_per_device !== null && activeMine.length >= deviceLimit) { setSubmitting(false); setFormError(`شما ${deviceLimit.toLocaleString('fa-AF')} نوبت فعال دارید. برای گرفتن نوبت جدید، یکی از نوبت‌های قبلی باید تکمیل یا لغو شود.`); return; }
+        const normalizedName = normalizeBookingName(customerName);
+        if (activeMine.some(item => (item.staff_id || '') === selectedStaffId && normalizeBookingName(item.customer_name) === normalizedName)) { setSubmitting(false); setFormError('برای این مراجعه‌کننده نزد همین کارمند یک نوبت فعال وجود دارد.'); return; }
         const maxCapacity = staffList.find(st => st.id === selectedStaffId)?.max_daily_appointments ?? (staffList.length ? 20 : 0);
         if (maxCapacity > 0 && dateAppointments.filter(a => (a.staff_id || '') === selectedStaffId && a.status !== 'cancelled').length >= maxCapacity) {
           setFormError(`⚠️ تکمیل ظرفیت: سقف نوبت‌دهی این کارمند برای تاریخ ${isoToAfghaniDate(selectedDate)} (${maxCapacity} نوبت) تکمیل گردیده است.`);
@@ -308,6 +314,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
           service_id: selectedService?.id || null,
           staff_id: chosenStaff?.id || null,
           customer_name: customerName.trim(),
+          booking_device_id: getBookingDeviceId(),
           customer_phone: customerPhone.trim() || null,
           queue_number: newQueueNum,
           status: 'waiting',
@@ -316,7 +323,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
         });
 
         if (error || !newApp) {
-          setFormError(error === 'BOOKING_CLOSED' ? 'پذیرش نوبت برای این روز بسته شده است.' : (error === 'BUSINESS_DAILY_CAPACITY_REACHED' || error?.startsWith('ظرفیت روزانهٔ پلن')) ? 'ظرفیت روزانهٔ پلن کسب‌وکار تکمیل شده است؛ روز دیگری انتخاب کنید.' : error === 'DAILY_CAPACITY_REACHED' ? 'ظرفیت این کارمند در این روز تکمیل شده است؛ کارمند یا روز دیگری انتخاب کنید.' : 'ثبت نوبت انجام نشد. لطفاً دوباره تلاش کنید.');
+          setFormError(error === 'BOOKING_CLOSED' ? 'پذیرش نوبت برای این روز بسته شده است.' : error === 'DEVICE_ACTIVE_LIMIT_REACHED' ? `شما ${(business.max_active_appointments_per_device ?? 3).toLocaleString('fa-AF')} نوبت فعال دارید. برای گرفتن نوبت جدید، یکی از نوبت‌های قبلی باید تکمیل یا لغو شود.` : error === 'DUPLICATE_ACTIVE_NAME' ? 'برای این مراجعه‌کننده نزد همین کارمند یک نوبت فعال وجود دارد.' : (error === 'BUSINESS_DAILY_CAPACITY_REACHED' || error?.startsWith('ظرفیت روزانهٔ پلن')) ? 'ظرفیت روزانهٔ پلن کسب‌وکار تکمیل شده است؛ روز دیگری انتخاب کنید.' : error === 'DAILY_CAPACITY_REACHED' ? 'ظرفیت این کارمند در این روز تکمیل شده است؛ کارمند یا روز دیگری انتخاب کنید.' : 'ثبت نوبت انجام نشد. لطفاً دوباره تلاش کنید.');
         } else {
           saveAppointmentToLocalStorage(business.id, newApp);
           // Optimistic update — Real-Time will also fire but we update instantly
@@ -594,6 +601,11 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
                 </div>
               </div>
 
+              <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-xs leading-6 text-rose-900" role="note">
+                <strong className="block text-rose-950">⏰ مهلت حضور</strong>
+                {business?.no_show_grace_minutes === 0 ? 'پس از فرا رسیدن نوبت، باید حاضر باشید؛ در غیر این صورت صاحب کسب‌وکار می‌تواند نوبت را لغو کند.' : `پس از فرا رسیدن نوبت، تا ${(business?.no_show_grace_minutes ?? 5).toLocaleString('fa-AF')} دقیقه حاضر شوید؛ پس از آن صاحب کسب‌وکار می‌تواند نوبت را لغو کند.`}
+              </div>
+
               <div className="space-y-3 pt-2">
                 <Button
                   onClick={handleDownloadImage}
@@ -691,8 +703,8 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
 
                 <div className="space-y-3 pt-2 border-t border-slate-100">
                   <Input
-                    label="نام و نام خانوادگی مشتری *"
-                    placeholder="مثلاً: علی محمدی"
+                    label="نام مراجعه‌کننده *"
+                    placeholder="مثلاً: احمد، علی یا محمد"
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
                     required

@@ -43,6 +43,7 @@ export async function createAppointment(
     service_id?: string | null;
     staff_id?: string | null;
     customer_name: string;
+    booking_device_id?: string | null;
     customer_phone?: string | null;
     queue_number: number;
     status?: AppointmentStatus;
@@ -57,6 +58,7 @@ export async function createAppointment(
     const payload: any = {
       business_id: appointmentData.business_id,
       customer_name: appointmentData.customer_name,
+      booking_device_id: appointmentData.booking_device_id || null,
       customer_phone: appointmentData.customer_phone || null,
       queue_number: appointmentData.queue_number,
       status: appointmentData.status || 'waiting',
@@ -81,6 +83,8 @@ export async function createAppointment(
       if (error.message.includes('BOOKING_CLOSED')) return { appointment: null, error: 'BOOKING_CLOSED' };
       if (error.message.includes('BUSINESS_DAILY_CAPACITY_REACHED')) return { appointment: null, error: 'ظرفیت روزانهٔ پلن کسب‌وکار تکمیل شده است؛ روز دیگری انتخاب کنید.' };
       if (error.message.includes('DAILY_CAPACITY_REACHED')) return { appointment: null, error: 'DAILY_CAPACITY_REACHED' };
+      if (error.message.includes('DEVICE_ACTIVE_LIMIT_REACHED')) return { appointment: null, error: 'DEVICE_ACTIVE_LIMIT_REACHED' };
+      if (error.message.includes('DUPLICATE_ACTIVE_NAME')) return { appointment: null, error: 'DUPLICATE_ACTIVE_NAME' };
       return { appointment: null, error: error.message };
     }
     return { appointment: data as unknown as Appointment, error: null };

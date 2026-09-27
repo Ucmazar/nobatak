@@ -9,6 +9,7 @@ import { QueueSkeleton } from '@/components/ui/QueueSkeleton';
 import { createLiveRefresh } from '@/lib/live-refresh';
 import { overlayQueue, type PendingQueueChanges } from '@/lib/queue-mutations';
 import { DailyBookingControl } from '@/components/ui/DailyBookingControl';
+import { DeviceBookingLimitSetting } from '@/components/ui/DeviceBookingLimitSetting';
 import { useRouter } from 'next/navigation';
 import type { DashboardAccessReport } from '@/lib/dashboard-access';
 import { supabase } from '@/lib/supabase/client';
@@ -833,7 +834,9 @@ export default function DashboardPage() {
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <h1 className="text-xl font-extrabold text-slate-900">{selectedBusiness.name}</h1>
-                      {/* <Badge variant="emerald">پایدار در Supabase</Badge> */}
+                      <Badge variant={profile?.plan_code === 'custom' ? 'amber' : profile?.plan_code === 'legacy' ? 'slate' : 'emerald'}>
+                        {profile?.plan_code === 'custom' ? 'پلن سفارشی' : profile?.plan_code === 'legacy' ? 'تنظیمات قبلی' : 'پلن آغاز رایگان'}
+                      </Badge>
                     </div>
                     <p className="text-xs text-slate-500">
                       {selectedBusiness.description || 'سیستم آنلاین نوبت‌دهی و مدیریت صف'}
@@ -1232,6 +1235,8 @@ export default function DashboardPage() {
                 </CardHeader>
                 <CardContent>
                   <BusinessQRCode key={selectedBusiness.id} name={selectedBusiness.name} slug={selectedBusiness.slug} phone={selectedBusiness.phone} />
+                  <div className="mt-6" />
+                  <DeviceBookingLimitSetting key={selectedBusiness.id} business={selectedBusiness} onSaved={updated => { selectedBusinessRef.current = updated; setSelectedBusiness(updated); setBusinesses(previous => previous.map(item => item.id === updated.id ? updated : item)); }} />
                   <div className="mt-6" />
                   <form onSubmit={handleUpdateBusinessSettings} className="space-y-4">
           <fieldset disabled={isPending('business-form')} aria-busy={isPending('business-form')} className="space-y-4 min-w-0">

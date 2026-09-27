@@ -2,11 +2,12 @@ import { Appointment, AppointmentStatus, Staff } from '@/types/database';
 import { useMemo } from 'react';
 import { queuePositions } from '@/lib/queue';
 
-export function StaffAppointmentTables({ appointments, allAppointments, staff, pendingActions, onStatusChange, onDelete, onDownload }: {
+export function StaffAppointmentTables({ appointments, allAppointments, staff, pendingActions, onStatusChange, onDownload }: {
   pendingActions: ReadonlySet<string>;
   appointments: Appointment[]; allAppointments: Appointment[]; staff: Staff[];
   onStatusChange: (id: string, status: AppointmentStatus) => void;
-  onDelete: (id: string) => void; onDownload: (appointment: Appointment) => void;
+  onDelete?: (id: string) => void;
+  onDownload: (appointment: Appointment) => void;
 }) {
   const positions = useMemo(() => queuePositions(allAppointments), [allAppointments]);
   const groups = new Map<string, { name: string; rows: Appointment[] }>();
@@ -31,7 +32,6 @@ export function StaffAppointmentTables({ appointments, allAppointments, staff, p
           {app.status === 'serving' && <button type="button" onClick={() => onStatusChange(app.id, 'completed')} className="rounded-lg bg-emerald-600 px-3 py-2 text-white">پایان نوبت</button>}
           {['waiting','serving'].includes(app.status) && <button type="button" onClick={() => onStatusChange(app.id, 'cancelled')} className="rounded-lg border px-3 py-2">لغو نوبت</button>}
           <button type="button" onClick={() => onDownload(app)} className="rounded-lg border px-3 py-2">دریافت رسید</button>
-          <button type="button" onClick={() => onDelete(app.id)} className="rounded-lg px-3 py-2 text-rose-600">حذف</button>
         <span role="status" className="self-center text-blue-700">{pendingActions.has("appointment:" + app.id) ? "در حال انجام…" : ""}</span></fieldset></td>
       </tr>)}</tbody>
     </table></div>
