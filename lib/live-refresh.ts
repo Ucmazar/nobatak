@@ -1,6 +1,7 @@
 /** Coalesce bursts, never overlap reads, and pause all background reads off-screen. */
-export function createLiveRefresh(refresh: () => Promise<unknown>, visible: () => boolean) {
+export function createLiveRefresh(refresh: () => Promise<unknown>, visible: () => boolean, refreshOnInitialSubscribe = true) {
   let closed = false;
+  let hasSubscribed = false;
   let connected = false;
   let running = false;
   let dirty = false;
@@ -31,7 +32,7 @@ export function createLiveRefresh(refresh: () => Promise<unknown>, visible: () =
   schedule();
   return {
     request,
-    connection(status: string) { connected = status === 'SUBSCRIBED'; schedule(); if (connected) request(); },
+    connection(status: string) { connected = status === 'SUBSCRIBED'; schedule(); if (connected) { if (hasSubscribed || refreshOnInitialSubscribe) request(); hasSubscribed = true; } },
     close() { closed = true; clearTimeout(heartbeat); clearTimeout(debounce); },
   };
 }

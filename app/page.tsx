@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { NavigationLink as Link } from '@/components/ui/NavigationLink';
 import { ArrowUpLeft, CalendarDays, Users, QrCode, Bell, Scissors, Stethoscope, Wrench, Building2, Check, ArrowLeft, Smartphone, Layers3 } from 'lucide-react';
 import { MarketingShell, StartCTA } from '@/components/marketing/MarketingShell';
 import { BookingDemo } from '@/components/marketing/BookingDemo';

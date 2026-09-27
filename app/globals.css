@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./workspace.css";
 
 :root {
   --background: #f8fafc;

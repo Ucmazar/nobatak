@@ -2,7 +2,8 @@
 
 import Image from 'next/image';
 import React, { useState, useEffect, useCallback } from 'react';
-import Link from 'next/link';
+import { NavigationLink as Link } from '@/components/ui/NavigationLink';
+import { useDashboardBootstrap } from '@/components/ui/DashboardBootstrap';
 import dynamic from 'next/dynamic';
 import { QueueSkeleton } from '@/components/ui/QueueSkeleton';
 import { createLiveRefresh } from '@/lib/live-refresh';
@@ -34,6 +35,7 @@ import { getUpcomingDaysAfghani, isoToAfghaniDate, getKabulTodayISO } from '@/li
 
 export default function DashboardPage() {
   const router = useRouter();
+  const bootstrap = useDashboardBootstrap();
   const { pending, runAction, isPending } = usePendingActions();
 
   const todayStr = getKabulTodayISO();
@@ -41,14 +43,15 @@ export default function DashboardPage() {
 
   const [selectedDate, setSelectedDate] = useState<string>(todayStr);
 
-  const [user, setUser] = useState<any>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<{id:string;email?:string;user_metadata?:{full_name?:string}} | null>(bootstrap?.user || null);
+  const [profile, setProfile] = useState<Profile | null>(bootstrap?.profile || null);
+  const [loading, setLoading] = useState(!bootstrap);
+  const [detailsReady, setDetailsReady] = useState(false);
   const [dataError, setDataError] = useState<string | null>(null);
 
   // Business State
-  const [businesses, setBusinesses] = useState<Business[]>([]);
-  const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
+  const [businesses, setBusinesses] = useState<Business[]>(bootstrap?.businesses || []);
+  const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(() => bootstrap?.businesses.find(b => b.is_active !== false) || bootstrap?.businesses[0] || null);
 
   const businessLimit = profile?.max_businesses === undefined ? 1 : profile.max_businesses;
   const canCreateBusiness = businessLimit === null || businesses.length < businessLimit;
@@ -120,13 +123,14 @@ export default function DashboardPage() {
     const revision = queueRevision.current;
     try {
       const [srvData, stData, appData] = await Promise.all([
-        getBusinessServices(businessId),
-        getBusinessStaff(businessId),
+        getBusinessServices(businessId, true),
+        getBusinessStaff(businessId, true),
         getBusinessAppointments(businessId, date, true),
       ]);
       if (selectedBusinessRef.current?.id !== businessId || selectedBusinessRef.current?.is_active === false) return;
       setServices(srvData);
       setStaffMembers(stData);
+      setDetailsReady(true);
       if (selectedDateRef.current === date && revision === queueRevision.current) { setAppointments(overlayQueue(appData, queueChanges.current)); setDataError(null); }
     } catch (err) {
       if (selectedBusinessRef.current?.id === businessId && selectedDateRef.current === date) setDataError(err instanceof Error ? err.message : 'دریافت اطلاعات ممکن نشد. لطفاً دوباره تلاش کنید.');
@@ -177,7 +181,12 @@ export default function DashboardPage() {
     async function initDashboard() {
       let redirectingToAdmin = false;
       try {
-        setLoading(true);
+        if (!bootstrap) setLoading(true);
+        if (bootstrap) {
+          const firstBiz=bootstrap.businesses.find(b=>b.is_active!==false) || bootstrap.businesses[0];
+          if(firstBiz){setSelectedBusiness(firstBiz);selectedBusinessRef.current=firstBiz;if(firstBiz.is_active!==false)void loadBusinessDetails(firstBiz.id,selectedDateRef.current);}
+          return;
+        }
         const { data: { user: currentUser }, error: authErr } = await supabase.auth.getUser();
 
         if (authErr || !currentUser) {
@@ -216,7 +225,7 @@ export default function DashboardPage() {
           setSelectedBusiness(firstBiz);
           selectedBusinessRef.current = firstBiz;
           // Use todayStr (stable) — not selectedDate — to avoid stale closure on mount
-          if (firstBiz.is_active !== false) await loadBusinessDetails(firstBiz.id, todayStr);
+          if (firstBiz.is_active !== false) void loadBusinessDetails(firstBiz.id, todayStr);
         }
       } catch (err) {
         console.error('Initialization error:', err);
@@ -236,7 +245,7 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!watchedBusinessId || !watchedBusinessActive) return;
     const sync = createLiveRefresh(() => loadAppointmentsOnly(watchedBusinessId, selectedDateRef.current),
-      () => document.visibilityState !== 'hidden' && navigator.onLine);
+      () => document.visibilityState !== 'hidden' && navigator.onLine, false);
     const channel = supabase.channel('dashboard:rt:' + watchedBusinessId)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'appointments', filter: 'business_id=eq.' + watchedBusinessId }, sync.request)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'appointments', filter: 'business_id=eq.' + watchedBusinessId }, sync.request)
@@ -257,6 +266,7 @@ export default function DashboardPage() {
 
   // Handle selecting another business
   const handleSelectBusiness = async (biz: Business) => {
+    setDetailsReady(false);
     setHiddenStaffIds([]);
     setSelectedBusiness(biz);
     selectedBusinessRef.current = biz;
@@ -713,7 +723,7 @@ export default function DashboardPage() {
   if (loading) return <QueueSkeleton />;
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
+    <div className="workspace-app min-h-screen flex flex-col font-sans">
       {/* Top Header Bar */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-2xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
@@ -770,6 +780,7 @@ export default function DashboardPage() {
         کسب‌وکارهای شما: {businesses.length} / {businessLimit === null ? 'نامحدود' : businessLimit}
         {!canCreateBusiness && <span className="mr-2 text-amber-700">برای ایجاد کسب‌وکار جدید، از مدیر بخواهید سقف شما را افزایش دهد.</span>}
       </div>
+      <section className="workspace-intro"><div><span>مدیریت کسب‌وکار / نوبتک</span><h1>روز کاری‌تان، در یک نگاه.</h1><p>نوبت‌ها، همکاران و روزهای پذیرش را از همین‌جا مدیریت کنید.</p></div><div className="workspace-date">{isoToAfghaniDate(selectedDate)}<small>روز انتخاب‌شده</small></div></section>
       {dataError && <div role="alert" className="mx-auto w-full max-w-7xl px-4 pt-4"><div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">{dataError}<button type="button" className="mr-3 font-bold underline" onClick={() => { if (selectedBusiness) void loadBusinessDetails(selectedBusiness.id, selectedDate); }}>تلاش دوباره</button></div></div>}
       {/* Global Notification Toast */}
       {alertMsg && (
@@ -861,7 +872,7 @@ export default function DashboardPage() {
               >
                 <span>⚡ مدیریت صف و نوبت‌ها</span>
                 <span className="bg-white/20 text-white px-1.5 py-0.5 rounded-md text-[10px]">
-                  {waitingAppointments.length}
+                  {detailsReady ? waitingAppointments.length : '—'}
                 </span>
               </button>
 
@@ -873,7 +884,7 @@ export default function DashboardPage() {
                     : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
                 }`}
               >
-                <span>🏷️ خدمات ({services.length})</span>
+                <span>🏷️ خدمات ({detailsReady ? services.length : '—'})</span>
               </button>
 
               <button
@@ -884,7 +895,7 @@ export default function DashboardPage() {
                     : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
                 }`}
               >
-                <span>👥 کارکنان ({staffMembers.length})</span>
+                <span>👥 کارکنان ({detailsReady ? staffMembers.length : '—'})</span>
               </button>
 
               <button
@@ -900,7 +911,7 @@ export default function DashboardPage() {
             </div>
 
             {/* TAB 1: Queue & Appointments */}
-            {activeTab === 'queue' && (
+            {detailsReady && activeTab === 'queue' && (
               <div className="space-y-6">
                 {/* DATE SELECTOR BAR FOR OWNER QUEUE */}
                 <div className="bg-white rounded-2xl border border-slate-200 p-3.5 shadow-xs space-y-2">
@@ -1063,7 +1074,7 @@ export default function DashboardPage() {
             )}
 
             {/* TAB 2: Services Management */}
-            {activeTab === 'services' && (
+            {detailsReady && activeTab === 'services' && (
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
                   <div>
@@ -1147,7 +1158,7 @@ export default function DashboardPage() {
             )}
 
             {/* TAB 3: Staff Management */}
-            {activeTab === 'staff' && (
+            {detailsReady && activeTab === 'staff' && (
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
                   <div>

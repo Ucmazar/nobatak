@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
+import { usePendingActions } from '@/lib/use-pending-actions';
 import { AdminTableSearch } from '@/components/ui/AdminTableSearch';
 import { matchesAdminSearch } from '@/lib/admin-search';
 import { BusinessLimitEditor } from '@/components/ui/BusinessLimitEditor';
@@ -24,14 +25,16 @@ export default function AdminDashboardPage() {
   const [businesses, setBusinesses] = useState<AdminBusinessItem[]>([]);
   const [users, setUsers] = useState<AdminUserItem[]>([]);
   const [activeTab, setActiveTab] = useState<'businesses' | 'users'>('businesses');
-  const [togglingId, setTogglingId] = useState<string | null>(null);
+  const {runAction,isPending}=usePendingActions();
+  const [refreshing,setRefreshing]=useState(false);
+  const ownerById=useMemo(()=>new Map(users.map(user=>[user.id,user])),[users]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const [userSearch, setUserSearch] = useState('');
   const [businessSearch, setBusinessSearch] = useState('');
   const filteredUsers = users.filter(user => matchesAdminSearch(userSearch, [user.full_name, user.phone, user.role]));
   const filteredBusinesses = businesses.filter(business => {
-    const owner = users.find(user => user.id === business.owner_id);
+    const owner = ownerById.get(business.owner_id);
     return matchesAdminSearch(businessSearch, [business.name, business.slug, business.phone, business.description, owner?.full_name]);
   });
 
@@ -40,7 +43,8 @@ export default function AdminDashboardPage() {
   }, []);
 
   async function checkAdminAndLoadData() {
-    setLoading(true);
+    return runAction('admin-refresh',async()=>{
+    setRefreshing(true);
     setErrorMsg(null);
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -53,11 +57,11 @@ export default function AdminDashboardPage() {
       // Check profile role
       const { data: profile } = await supabase
         .from('profiles')
-        .select('role')
+        .select('role,is_active')
         .eq('id', user.id)
         .single();
 
-      if (!profile || profile.role !== 'superadmin') {
+      if (!profile || profile.role !== 'superadmin' || profile.is_active === false) {
         setIsSuperAdmin(false);
         setLoading(false);
         return;
@@ -79,12 +83,13 @@ export default function AdminDashboardPage() {
       console.error('Admin loading error:', err);
       setErrorMsg(err.message || 'خطا در دریافت اطلاعات مدیریتی');
     } finally {
-      setLoading(false);
+      setLoading(false); setRefreshing(false);
     }
+    });
   }
 
   async function handleToggleBusiness(businessId: string, currentStatus: boolean) {
-    setTogglingId(businessId);
+    return runAction('business:'+businessId,async()=>{
     try {
       const updated = await toggleBusinessActive(businessId, !currentStatus);
       if (!updated.success) throw new Error(updated.error || 'تغییر وضعیت ثبت نشد');
@@ -95,13 +100,12 @@ export default function AdminDashboardPage() {
       }
     } catch (err: any) {
       alert('خطا در تغییر وضعیت کسب‌وکار: ' + err.message);
-    } finally {
-      setTogglingId(null);
     }
+    });
   }
 
   async function handleToggleUser(userId: string, currentStatus: boolean) {
-    setTogglingId(userId);
+    return runAction('user:'+userId,async()=>{
     try {
       const res = await toggleUserActive(userId, !currentStatus);
       if (res.success) {
@@ -113,9 +117,8 @@ export default function AdminDashboardPage() {
       }
     } catch (err: any) {
       alert('خطا در تغییر وضعیت کاربر: ' + err.message);
-    } finally {
-      setTogglingId(null);
     }
+    });
   }
 
   if (loading) {
@@ -152,16 +155,17 @@ export default function AdminDashboardPage() {
       {/* Welcome & Stats Row */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">پنل مدیریت اصلی (Super Admin)</h1>
+          <h1 className="text-2xl font-bold text-white">مرکز مدیریت نوبتک</h1>
           <p className="text-slate-400 text-sm mt-1">
             خوش آمدید <span className="text-indigo-400 font-semibold">fahimadmin</span> — مدیریت کامل سیستم نوبتک
           </p>
         </div>
         <button
+          disabled={refreshing} aria-busy={refreshing}
           onClick={checkAdminAndLoadData}
           className="self-start md:self-auto bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-xl text-xs flex items-center gap-2 border border-slate-700 transition"
         >
-          🔄 به‌روزرسانی داده‌ها
+          {refreshing ? 'در حال به‌روزرسانی…' : 'به‌روزرسانی داده‌ها'}
         </button>
       </div>
 
@@ -287,7 +291,7 @@ export default function AdminDashboardPage() {
                       </td>
                       <td className="p-4 text-center">
                         <button
-                          disabled={togglingId === bus.id}
+                          disabled={isPending('business:'+bus.id)}
                           onClick={() => handleToggleBusiness(bus.id, bus.is_active !== false)}
                           className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition ${
                             bus.is_active
@@ -295,7 +299,7 @@ export default function AdminDashboardPage() {
                               : 'bg-emerald-950/40 hover:bg-emerald-900/60 border-emerald-800 text-emerald-300'
                           } disabled:opacity-50`}
                         >
-                          {togglingId === bus.id
+                          {isPending('business:'+bus.id)
                             ? 'در حال تغییر...'
                             : bus.is_active
                             ? 'غیرفعال کردن'
@@ -382,7 +386,7 @@ export default function AdminDashboardPage() {
                             <span className="text-xs text-slate-500 font-mono">—</span>
                           ) : (
                             <button
-                              disabled={togglingId === usr.id}
+                              disabled={isPending('user:'+usr.id)}
                               onClick={() => handleToggleUser(usr.id, isActive)}
                               className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition ${
                                 isActive
@@ -390,7 +394,7 @@ export default function AdminDashboardPage() {
                                   : 'bg-emerald-950/40 hover:bg-emerald-900/60 border-emerald-800 text-emerald-300'
                               } disabled:opacity-50`}
                             >
-                              {togglingId === usr.id
+                              {isPending('user:'+usr.id)
                                 ? 'در حال تغییر...'
                                 : isActive
                                 ? 'غیرفعال کردن'

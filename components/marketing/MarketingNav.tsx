@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import Link from 'next/link';
+import { NavigationLink as Link } from '@/components/ui/NavigationLink';
 import Image from 'next/image';
 import { Menu, X, ArrowUpLeft } from 'lucide-react';
 const links = [['/services','خدمات'],['/pricing','پلن‌ها'],['/guide','چطور کار می‌کند؟'],['/about','دربارهٔ ما'],['/contact','ارتباط با ما']];

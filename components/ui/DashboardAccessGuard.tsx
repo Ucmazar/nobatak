@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import type { DashboardAccessReport } from '@/lib/dashboard-access';
 import { supabase } from '@/lib/supabase/client';
 import { createLiveRefresh } from '@/lib/live-refresh';
+import { DashboardBootstrapContext } from './DashboardBootstrap';
 import { AdminLogoutButton } from './AdminLogoutButton';
 
 export function DashboardAccessGuard({ children, initialReport }: { children: ReactNode; initialReport: DashboardAccessReport }) {
@@ -24,7 +25,7 @@ export function DashboardAccessGuard({ children, initialReport }: { children: Re
         if (state === 'disabled' || state === 'business_disabled') window.location.replace('/account-disabled');
       } catch { if (!disposed) setAccess('unavailable'); }
     }
-    const sync = createLiveRefresh(check, () => document.visibilityState !== 'hidden' && navigator.onLine);
+    const sync = createLiveRefresh(check, () => document.visibilityState !== 'hidden' && navigator.onLine, false);
     const account = initialReport.accountId;
     const channel = account ? supabase.channel('dashboard-access:' + account)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'businesses', filter: 'owner_id=eq.' + account }, sync.request)
@@ -48,5 +49,5 @@ export function DashboardAccessGuard({ children, initialReport }: { children: Re
     <p role="alert">{access === 'unavailable' ? 'بررسی دسترسی ممکن نشد. تا برقراری اتصال، داشبورد بسته است.' : 'در حال بررسی دسترسی…'}</p>
     {access === 'unavailable' && <AdminLogoutButton />}
   </main>;
-  return children;
+  return <DashboardBootstrapContext.Provider value={initialReport.bootstrap || null}>{children}</DashboardBootstrapContext.Provider>;
 }

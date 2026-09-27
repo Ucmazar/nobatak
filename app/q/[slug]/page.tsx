@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, use, useCallback, useRef } from 'react';
-import Link from 'next/link';
+import { NavigationLink as Link } from '@/components/ui/NavigationLink';
 import Image from 'next/image';
 import { createLiveRefresh } from '@/lib/live-refresh';
 import { getBookingDay, type BookingDay } from '@/lib/booking-day';
@@ -388,7 +388,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
   const capacityFull = maxCapacity > 0 && dateAppointments.filter(a => (a.staff_id || '') === selectedStaffId && a.status !== 'cancelled').length >= maxCapacity;
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans pb-12">
+    <div className="booking-app min-h-screen flex flex-col font-sans pb-12">
       {/* Public Header */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-20 shadow-2xs">
         <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between">
@@ -419,7 +419,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
         )}
 
         {/* Business Branding Card */}
-        <div className="bg-gradient-to-br from-blue-700 via-blue-600 to-indigo-700 text-white rounded-3xl p-6 sm:p-8 shadow-xl shadow-blue-600/15 relative overflow-hidden space-y-4">
+        <div className="booking-brand text-white rounded-3xl p-6 sm:p-8 shadow-xl shadow-blue-600/15 relative overflow-hidden space-y-4">
           <div className="flex items-start gap-4">
             <div className="w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center text-3xl font-extrabold border border-white/20 shrink-0">
               {business.logo_url || business.name.charAt(0)}
@@ -443,7 +443,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
         </div>
 
         {/* DATE SELECTION BAR */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-3.5 shadow-xs space-y-2.5">
+        <div className="booking-date-picker bg-white rounded-2xl border border-slate-200 p-3.5 shadow-xs space-y-2.5">
           <div className="flex items-center justify-between text-xs font-bold text-slate-800 px-1">
             <span className="flex items-center gap-1.5">
               <span>📅</span>

@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { NavigationLink as Link } from '@/components/ui/NavigationLink';
 import { Check, ArrowUpLeft } from 'lucide-react';
 import { samplePlans } from '@/lib/marketing';
 export function PricingCards(){return <><div className="mk-plans">{samplePlans.map(plan=><article key={plan.id} className={'mk-plan '+(plan.featured?'mk-plan-featured':'')}>{plan.featured&&<span className="mk-plan-label">پیشنهاد برای کسب‌وکارهای فعال</span>}<p className="mk-eyebrow">{plan.name}</p><h3>{plan.caption}</h3><div className="mk-price">{plan.price}<span>{plan.id==='start'?'طرح پیشنهادی':'افغانی / ماه · نمونه'}</span></div><ul>{plan.features.map(item=><li key={item}><Check size={16}/>{item}</li>)}</ul><Link href={'/pricing#'+plan.id} className={'mk-btn '+(plan.featured?'':'mk-btn-outline')}>جزئیات پلن نمونه <ArrowUpLeft size={17}/></Link></article>)}</div><p className="mk-plan-disclaimer">این پلن‌ها نمونه‌اند؛ قیمت‌ها و امکانات نهایی نیستند و خرید یا اشتراک فعالی ایجاد نمی‌کنند.</p></>;}

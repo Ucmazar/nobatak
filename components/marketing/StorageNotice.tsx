@@ -1,6 +1,6 @@
 'use client';
 import { useSyncExternalStore, useState } from 'react';
-import Link from 'next/link';
+import { NavigationLink as Link } from '@/components/ui/NavigationLink';
 const key='nobatak_storage_notice_v1';
 function subscribe(callback:()=>void){window.addEventListener('storage',callback);window.addEventListener('nobatak-storage-notice',callback);return ()=>{window.removeEventListener('storage',callback);window.removeEventListener('nobatak-storage-notice',callback);};}
 function snapshot(){try{return localStorage.getItem(key)==='seen';}catch{return false;}}

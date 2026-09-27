@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { NavigationLink as Link } from '@/components/ui/NavigationLink';
 import { ArrowUpLeft } from 'lucide-react';
 import { MarketingNav } from './MarketingNav';
 import { StorageNoticeLink } from './StorageNotice';

@@ -1,6 +1,6 @@
 'use client';
 import { useRef, useState } from 'react';
-import Link from 'next/link';
+import { NavigationLink as Link } from '@/components/ui/NavigationLink';
 export function ContactForm(){
  const lock=useRef(false);const request=useRef<{payload:string;id:string}|null>(null);
  const [pending,setPending]=useState(false);const [status,setStatus]=useState('');const [failed,setFailed]=useState(false);

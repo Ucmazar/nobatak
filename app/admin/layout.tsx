@@ -1,11 +1,11 @@
 import Image from 'next/image';
 import { ReactNode } from 'react';
-import Link from 'next/link';
+import { NavigationLink as Link } from '@/components/ui/NavigationLink';
 import { AdminLogoutButton } from '@/components/ui/AdminLogoutButton';
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans dir-rtl" dir="rtl">
+    <div className="admin-app min-h-screen text-slate-100 font-sans dir-rtl" dir="rtl">
       {/* Header */}
       <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
@@ -30,6 +30,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         </div>
       </header>
 
+      <nav className="admin-navigation" aria-label="بخش‌های مدیریت"><Link href="/admin">نمای کلی و حساب‌ها</Link><Link href="/admin/telegram">تنظیمات تلگرام</Link><Link href="/">مشاهدهٔ سایت</Link></nav>
       {/* Main Container */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {children}
