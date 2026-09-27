@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
@@ -15,12 +15,14 @@ export default function RegisterPage() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const submitting = useRef(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting.current) return;
     if (!fullName || !email || !password) {
       setError('لطفاً تمامی فیلدها را پر کنید.');
       return;
@@ -31,6 +33,8 @@ export default function RegisterPage() {
       return;
     }
 
+    submitting.current = true;
+    let navigating = false;
     setLoading(true);
     setError(null);
     setSuccessMsg(null);
@@ -63,13 +67,17 @@ export default function RegisterPage() {
         document.cookie = `sb-access-token=${data.session.access_token}; path=/; max-age=604800; SameSite=Lax`;
         router.push('/dashboard');
         router.refresh();
-      } else if (data.user && data.session) {
+        navigating = true;
+      } else if (data.user) {
         setSuccessMsg('لینک تأیید به ایمیل شما ارسال شد. پس از تأیید ایمیل، وارد حساب شوید.');
       }
     } catch {
       setError('خطایی در فرایند ثبت‌نام رخ داد. دوباره تلاش کنید.');
     } finally {
-      setLoading(false);
+      if (!navigating) {
+        submitting.current = false;
+        setLoading(false);
+      }
     }
   };
 
@@ -133,7 +141,7 @@ export default function RegisterPage() {
               />
 
               <Button type="submit" size="lg" className="w-full mt-2" isLoading={loading}>
-                ایجاد حساب کاربری
+                {loading ? 'لطفاً صبر کنید…' : 'ایجاد حساب کاربری'}
               </Button>
             </form>
 

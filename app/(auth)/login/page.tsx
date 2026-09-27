@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
@@ -14,16 +14,20 @@ export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const submitting = useRef(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting.current) return;
     if (!email || !password) {
       setError('لطفاً ایمیل و رمز عبور را وارد کنید.');
       return;
     }
 
+    submitting.current = true;
+    let navigating = false;
     setLoading(true);
     setError(null);
 
@@ -51,11 +55,15 @@ export default function LoginPage() {
         document.cookie = `sb-access-token=${data.session.access_token}; path=/; max-age=604800; SameSite=Lax`;
         router.replace(profile?.role === 'superadmin' ? '/admin' : '/dashboard');
         router.refresh();
+        navigating = true;
       }
     } catch {
       setError('خطایی در برقراری ارتباط رخ داد. دوباره تلاش کنید.');
     } finally {
-      setLoading(false);
+      if (!navigating) {
+        submitting.current = false;
+        setLoading(false);
+      }
     }
   };
 
@@ -104,7 +112,7 @@ export default function LoginPage() {
               />
 
               <Button type="submit" size="lg" className="w-full mt-2" isLoading={loading}>
-                ورود به سیستم
+                {loading ? 'لطفاً صبر کنید…' : 'ورود به سیستم'}
               </Button>
             </form>
 
