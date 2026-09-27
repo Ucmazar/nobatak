@@ -1,0 +1,9 @@
+# Responsiveness and workspace update
+
+- NavigationLink retains Next Link prefetch and native modified-click behavior. Same-page/hash links stay native; route changes use a transition with visible waiting text and a synchronous repeat-click lock. Root loading/error boundaries provide feedback and retry.
+- Dashboard server access verification now fetches profile and owned businesses in parallel. The verified bootstrap initializes the client without another sequential auth/profile/business round trip. Periodic access reports retain their small public-to-owner shape, and database authorization remains unchanged.
+- Dashboard queue and access subscriptions skip redundant first-subscribe refetch (the initial verified fetch already runs); reconnection still reconciles. No settled cache was added for appointments or permissions.
+- Admin refresh preserves the current screen, shows pending state and locks repeat requests. Per-row user/business mutation locks are independent. Owner lookup uses a map rather than repeated linear searches.
+- Workspace, admin and public booking adopt the homepage navy/blue/light-card design. Existing operations and the visible public date selector are preserved.
+- Fixed mobile feature cards: the tablet rule for the last child previously overrode single-column placement and created an implicit second column. All five cards now occupy the same full-width column.
+- Validation: production build/TypeScript passed. Focused tests cover bootstrap authorization, request counts, minimal periodic reports, repeated navigation, native hash behavior and realtime reconnect. Browser verified 390px cards: all five at left 18px / width 349px; navigation to Services works. No production latency benchmark or authenticated end-to-end owner/admin session was available. Database/network latency remains environment-dependent.
