@@ -34,7 +34,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
   const slug = resolvedParams.slug;
 
   const { runAction, pending } = usePendingActions();
-  const [planDailyLimit, setPlanDailyLimit] = useState(0);
+  const [planDailyLimit, setPlanDailyLimit] = useState<number | null>(null);
   const [bookingDay, setBookingDay] = useState<BookingDay | null>(null);
   const [catalogChecking, setCatalogChecking] = useState(true);
   const [queueError, setQueueError] = useState<string | null>(null);
@@ -90,12 +90,12 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
   const loadAppointmentsForDate = useCallback(async (bizId: string, date: string) => {
     const version = queueVersion.current;
     try {
-      const [appData, day, plan] = await Promise.all([getBusinessAppointments(bizId, date, true), getBookingDay(bizId, date), supabase.rpc('business_plan_daily_limit', { p_business: bizId })]);
+      const [appData, day, plan] = await Promise.all([getBusinessAppointments(bizId, date, true), getBookingDay(bizId, date), supabase.rpc('business_plan_daily_quota', { p_business: bizId })]);
       if (plan.error && plan.error.code !== 'PGRST202') throw plan.error;
       const savedIds = myAppointmentsRef.current.map(item => item.id);
       const savedRows = await readSavedTickets(bizId, savedIds);
       if (businessRef.current?.id !== bizId || queueVersion.current !== version) return appData;
-      if (selectedDateRef.current === date) { setAppointments(appData); setPlanDailyLimit(plan.data || 0); setBookingDay(day); setQueueError(null); }
+      if (selectedDateRef.current === date) { setAppointments(appData); setPlanDailyLimit(plan.data ?? null); setBookingDay(day); setQueueError(null); }
       setMyAppointments(previous => previous.flatMap(item => {
         if (!savedIds.includes(item.id)) return [item];
         const live = savedRows.find(row => row.id === item.id);
@@ -134,12 +134,12 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
           getBusinessStaff(bizData.id, true),
           getBusinessAppointments(bizData.id, todayStr, true),
           getBookingDay(bizData.id, todayStr),
-          supabase.rpc('business_plan_daily_limit', { p_business: bizData.id }),
+          supabase.rpc('business_plan_daily_quota', { p_business: bizData.id }),
         ]);
 
         if (disposed) return;
         if (plan.error && plan.error.code !== 'PGRST202') throw plan.error;
-        setPlanDailyLimit(plan.data || 0);
+        setPlanDailyLimit(plan.data ?? null);
         setBookingDay(day);
         savePublicCatalog(slug, bizData, srvData, stData);
         setServices(srvData);
@@ -391,7 +391,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
 
   const selectedDayInfo = upcomingDays.find(d => d.isoDate === selectedDate);
   const maxCapacity = selectedStaffId ? staffList.find(st => st.id === selectedStaffId)?.max_daily_appointments ?? 20 : 0;
-  const businessRemaining = planDailyLimit > 0 ? Math.max(0, planDailyLimit - dateAppointments.filter(a => a.status !== 'cancelled').length) : Infinity;
+  const businessRemaining = planDailyLimit !== null ? Math.max(0, planDailyLimit - dateAppointments.filter(a => a.status !== 'cancelled').length) : Infinity;
   const businessCapacityFull = businessRemaining === 0;
   const capacityFull = businessCapacityFull || maxCapacity > 0 && dateAppointments.filter(a => (a.staff_id || '') === selectedStaffId && a.status !== 'cancelled').length >= maxCapacity;
 
@@ -444,8 +444,8 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
               {(business.opening_time || business.closing_time) && <span>ساعت کاری: {business.opening_time?.slice(0,5) || 'تعیین نشده'} تا {business.closing_time?.slice(0,5) || 'تعیین نشده'}{business.opening_time && business.closing_time && business.closing_time < business.opening_time ? ' (روز بعد)' : ''} — به وقت افغانستان</span>}
               {business.address && <span>📍 {business.address}</span>}
               {business.phone && <span className="dir-ltr text-right font-mono">📞 {business.phone}</span>}
-              <span>ظرفیت کارمند انتخاب‌شده در روز {isoToAfghaniDate(selectedDate)}: {!selectedStaffId && staffList.length > 0 ? 'ابتدا کارمند را انتخاب کنید' : maxCapacity === 0 && planDailyLimit === 0 ? 'بدون محدودیت' : Math.min(maxCapacity || Infinity, planDailyLimit || Infinity).toLocaleString('fa-AF') + ' نوبت'}</span>
-              {(maxCapacity > 0 || planDailyLimit > 0) && <span role="status">{capacityFull ? 'ظرفیت این روز تکمیل شده؛ روز دیگری انتخاب کنید.' : Math.min(businessRemaining, maxCapacity > 0 ? Math.max(0, maxCapacity - dateAppointments.filter(a => (a.staff_id || '') === selectedStaffId && a.status !== 'cancelled').length) : Infinity).toLocaleString('fa-AF') + ' نوبت باقی مانده'}</span>}
+              <span>ظرفیت کارمند انتخاب‌شده در روز {isoToAfghaniDate(selectedDate)}: {!selectedStaffId && staffList.length > 0 ? 'ابتدا کارمند را انتخاب کنید' : maxCapacity === 0 && planDailyLimit === null ? 'بدون محدودیت' : Math.min(maxCapacity || Infinity, planDailyLimit ?? Infinity).toLocaleString('fa-AF') + ' نوبت'}</span>
+              {(maxCapacity > 0 || planDailyLimit !== null) && <span role="status">{capacityFull ? 'ظرفیت این روز تکمیل شده؛ روز دیگری انتخاب کنید.' : Math.min(businessRemaining, maxCapacity > 0 ? Math.max(0, maxCapacity - dateAppointments.filter(a => (a.staff_id || '') === selectedStaffId && a.status !== 'cancelled').length) : Infinity).toLocaleString('fa-AF') + ' نوبت باقی مانده'}</span>}
             </div>
           )}
         </div>

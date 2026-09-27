@@ -9,8 +9,11 @@ export type Json =
 export type UserRole = 'user' | 'superadmin'
 
 export interface Profile {
-  plan_code?: 'free' | 'legacy'
+  plan_code?: 'free' | 'custom' | 'legacy'
   max_businesses?: number | null
+  max_services_per_business?: number
+  max_staff_per_business?: number
+  max_daily_appointments_per_business?: number
   id: string
   full_name: string | null
   phone: string | null
@@ -86,6 +89,8 @@ export interface Database {
     Functions: {
       assign_free_plan: { Args: { p_user: string }; Returns: undefined };
       business_plan_daily_limit: { Args: { p_business: string }; Returns: number | null };
+      business_plan_daily_quota: { Args: { p_business: string }; Returns: number | null };
+      set_user_plan_limits: { Args: { p_user: string; p_businesses: number; p_services: number; p_staff: number; p_daily_appointments: number }; Returns: undefined };
       set_business_day_with_transfer: { Args: { p_business: string; p_date: string; p_closed: boolean; p_reason: string; p_request: string }; Returns: Json };
       set_business_day_booking: { Args: { p_business: string; p_closed: boolean; p_reason: string; p_cancel_today: boolean; p_request: string }; Returns: Json };
       daily_notice_summary: { Args: { p_business: string }; Returns: Json };

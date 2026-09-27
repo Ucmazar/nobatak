@@ -368,7 +368,7 @@ export default function AdminDashboardPage() {
                           {isoToAfghaniDate(usr.created_at)}
                         </td>
                         <td className="p-4">
-                          {usr.role === 'superadmin' ? 'نامحدود' : usr.plan_code === 'free' ? 'آغاز رایگان · ۱ کسب‌وکار' : <BusinessLimitEditor userId={usr.id} limit={usr.max_businesses} count={businesses.filter(b => b.owner_id === usr.id).length} onSaved={limit => setUsers(prev => prev.map(u => u.id === usr.id ? { ...u, max_businesses: limit } : u))} />}
+                          {usr.role === 'superadmin' ? 'نامحدود' : ['free', 'custom'].includes(usr.plan_code || '') ? `${usr.plan_code === 'custom' ? 'سفارشی' : 'آغاز رایگان'} · ${usr.max_businesses ?? 1} کسب‌وکار` : <BusinessLimitEditor userId={usr.id} limit={usr.max_businesses} count={businesses.filter(b => b.owner_id === usr.id).length} onSaved={limit => setUsers(prev => prev.map(u => u.id === usr.id ? { ...u, max_businesses: limit } : u))} />}
                         </td>
                         <td className="p-4">
                           {isActive ? (

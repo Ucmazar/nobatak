@@ -1,6 +1,6 @@
 # Free plan (آغاز)
 
-Default for new accounts: one business, three active services, one active staff member, ten non-cancelled appointments per business/calendar date. Completed appointments count; cancellations release capacity. Staff capacity may lower, never raise, the business allowance. No paid plans or payment integration are enabled.
+Default for new accounts: one business, three active services, one active staff member, ten non-cancelled appointments per business/calendar date. The active superadmin can set all four limits separately for each account. Any non-default combination is labeled `custom`; restoring 1/3/1/10 returns the account to `free`. Completed appointments count; cancellations release capacity. Staff capacity may lower, never raise, the business allowance. No paid plans or payment integration are enabled.
 
 ## Install
 
@@ -8,7 +8,7 @@ Run `supabase/free_plan.sql` in Supabase SQL Editor after the existing `independ
 
 No live database changes are performed by deploying the website alone. Until SQL is installed, the admin plans page explains the missing migration. Public booking retains compatibility with the old schema; database enforcement starts when SQL is installed.
 
-Existing users with custom business allowances or resources above the free quotas keep `legacy` settings. No records are removed or subscriptions sold. The active superadmin can assign the free plan at `/admin/plans`; assignment rejects excessive businesses or active resources rather than deleting them. Existing booked appointments remain; additional bookings are blocked on dates already at the cap.
+Existing users with earlier exceptional settings keep `legacy` settings until the admin saves limits for them. No records are removed or subscriptions sold. At `/admin/plans`, lowering a limit never deletes or disables existing data; it blocks additional businesses/resources/bookings until usage is below the new limit. Existing booked appointments remain.
 
 The existing per-user business allowance editor remains available for legacy accounts. Free accounts cannot raise their own limit. Active superadmins are exempt. Resource and booking triggers lock the business row to serialize quota checks. Existing ownership/RLS and staff-capacity checks remain enabled.
 
