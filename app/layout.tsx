@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Vazirmatn } from "next/font/google";
 import "./globals.css";
+import "./marketing.css";
+import { StorageNotice } from "@/components/marketing/StorageNotice";
 
 const vazirmatn = Vazirmatn({
   subsets: ["arabic", "latin"],
@@ -24,6 +26,7 @@ export default function RootLayout({
     <html lang="fa" dir="rtl" className={`${vazirmatn.variable} h-full`}>
       <body className={`${vazirmatn.className} min-h-full flex flex-col bg-slate-50 text-slate-900 antialiased`}>
         {children}
+        <StorageNotice />
       </body>
     </html>
   );

@@ -1,0 +1,12 @@
+'use client';
+import { useState } from 'react';
+import { Check, CalendarDays, Clock3, ArrowLeft, RotateCcw, Bell } from 'lucide-react';
+export function BookingDemo(){
+ const [day,setDay]=useState(0);const [booked,setBooked]=useState(false);
+ return <div className="mk-product" id="demo"><div className="mk-orbit mk-orbit-one"/><div className="mk-orbit mk-orbit-two"/>
+ <div className="mk-floating mk-float-top"><span className="mk-icon-soft"><Check size={19}/></span><div><strong>همه‌چیز سر جای خودش</strong><small>یک صف منظم، یک روز آرام</small></div></div>
+ <div className="mk-phone"><div className="mk-phone-notch"/><div className="mk-phone-top"><span>۹:۴۱</span><span>● ▰</span></div><div className="mk-phone-brand"><span className="mk-demo-avatar">ن</span><div><strong>کسب‌وکار نمونه</strong><small>پیش‌نمایش تعاملی نوبتک</small></div><span className="mk-dot"/></div>
+ <div className="mk-phone-content"><p className="mk-demo-greeting">سلام، خوش آمدید 👋</p><h3>چه روزی می‌آیید؟</h3><div className="mk-demo-days">{['امروز','فردا','پس‌فردا'].map((label,index)=><button type="button" aria-pressed={day===index} key={label} className={day===index?'active':''} onClick={()=>{setDay(index);setBooked(false);}}><CalendarDays size={17}/>{label}</button>)}</div>
+ <div aria-live="polite">{day===1?<div className="mk-demo-closed"><CalendarDays size={27}/><strong>فردا رخصت هستیم</strong><p>برای دریافت نوبت، روز دیگری را انتخاب کنید.</p></div>:booked?<div className="mk-demo-receipt"><span><Check size={26}/></span><p>رسید نمایشی شما</p><strong>۰۱۸</strong><small>ثبت واقعی انجام نشده است</small><button type="button" onClick={()=>setBooked(false)}><RotateCcw size={13}/> دوباره امتحان کن</button></div>:<><div className="mk-demo-service"><span className="mk-icon-soft"><Clock3 size={22}/></span><div><strong>خدمت نمونه</strong><small>مدت تقریبی: ۲۰ دقیقه</small></div><Check size={17}/></div><div className="mk-demo-stats"><div><strong>۰۱۵</strong><small>نوبت جاری</small></div><div><strong>۲</strong><small>نفر پیش از شما</small></div></div><button className="mk-demo-submit" type="button" onClick={()=>setBooked(true)}>دریافت نوبت نمونه <ArrowLeft size={17}/></button><p className="mk-demo-note">امتحان کنید؛ هیچ نوبت واقعی ثبت نمی‌شود.</p></>}</div></div></div>
+ <div className="mk-floating mk-float-bottom"><span className="mk-icon-soft"><Bell size={19}/></span><div><strong>نوبت‌تان نزدیک است</strong><small>نمونهٔ اطلاع‌رسانی به مشتری</small></div></div><span className="mk-product-caption">از انتخاب روز تا رسید، در یک مسیر ساده</span></div>;
+}
