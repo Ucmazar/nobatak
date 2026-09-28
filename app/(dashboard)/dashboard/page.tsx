@@ -65,6 +65,7 @@ export default function DashboardPage() {
 
   // Active Tab
   const [activeTab, setActiveTab] = useState<'queue' | 'services' | 'staff' | 'settings'>('queue');
+  const [holidayPanelOpen, setHolidayPanelOpen] = useState(false);
 
   // Feedback Notification Toast
   const [alertMsg, setAlertMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -101,7 +102,6 @@ export default function DashboardPage() {
   // Appointments State & Modals
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [hiddenStaffIds, setHiddenStaffIds] = useState<string[]>([]);
-  const [queueServiceFilter, setQueueServiceFilter] = useState('all');
   const [appointmentFilter, setAppointmentFilter] = useState<'all' | 'waiting' | 'serving' | 'completed' | 'cancelled'>('all');
   const [isAddAppointmentModalOpen, setIsAddAppointmentModalOpen] = useState(false);
   const [custName, setCustName] = useState('');
@@ -276,7 +276,7 @@ export default function DashboardPage() {
   const handleSelectBusiness = async (biz: Business) => {
     setDetailsReady(false);
     setHiddenStaffIds([]);
-    setQueueServiceFilter('all');
+    setHolidayPanelOpen(false);
     setSelectedBusiness(biz);
     selectedBusinessRef.current = biz;
     if (biz.is_active !== false) await loadBusinessDetails(biz.id, selectedDateRef.current);
@@ -715,12 +715,11 @@ export default function DashboardPage() {
   // Queue Calculations for selected date
   const dateAppointments = appointments.filter(a => a.appointment_date === selectedDate);
   const staffAppointments = dateAppointments.filter(a => !hiddenStaffIds.includes(a.staff_id || 'unassigned'));
-  const scopedAppointments = staffAppointments.filter(a => queueServiceFilter === 'all' || a.service_id === queueServiceFilter);
+  const scopedAppointments = staffAppointments;
   const currentServingApp = scopedAppointments.find(a => a.status === 'serving');
   const waitingAppointments = scopedAppointments.filter(a => a.status === 'waiting');
   const completedAppointments = scopedAppointments.filter(a => a.status === 'completed');
-  const selectedQueueService = services.find(service => service.id === queueServiceFilter);
-  const avgDuration = selectedQueueService?.duration_minutes ?? (services.length > 0 ? services[0].duration_minutes : 20);
+  const avgDuration = services.length > 0 ? services[0].duration_minutes : 20;
   const estWaitNewJoiner = waitingAppointments.length * avgDuration;
 
   const filteredAppointments = scopedAppointments.filter(a => {
@@ -743,7 +742,7 @@ export default function DashboardPage() {
             {selectedBusiness && <span className="hidden max-w-48 truncate text-xs font-bold text-blue-100 md:block">داشبورد {selectedBusiness.name}</span>}
             {selectedBusiness && <Badge variant={profile?.plan_code === 'custom' ? 'amber' : profile?.plan_code === 'legacy' ? 'slate' : 'emerald'}>{profile?.plan_code === 'growth' ? 'پلن رشد' : profile?.plan_code === 'custom' ? 'پلن سفارشی' : profile?.plan_code === 'legacy' ? 'تنظیمات قبلی' : 'پلن آغاز'}</Badge>}
             {businesses.length > 0 && selectedBusiness && <select disabled={pending.size > 0} value={selectedBusiness.id} onChange={(event) => { const business = businesses.find(item => item.id === event.target.value); if (business) void handleSelectBusiness(business); }} className="workspace-business-switcher cursor-pointer rounded-xl border border-white/25 bg-white px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-cyan-300">{businesses.map(business => <option key={business.id} value={business.id}>{business.name}{business.is_active === false ? ' (غیرفعال)' : ''}</option>)}</select>}
-            <Button size="sm" variant="outline" disabled={!canCreateBusiness} onClick={() => setIsBizModalOpen(true)} className="hidden border-white/30 bg-transparent text-xs text-white hover:bg-white/10 sm:inline-flex"><Plus size={15} aria-hidden="true" /> کسب‌وکار</Button>
+            <Button size="sm" variant="outline" disabled={!canCreateBusiness} onClick={() => setIsBizModalOpen(true)} className="workspace-add-business hidden border-white/30 bg-transparent text-xs text-white hover:bg-white/10 disabled:cursor-not-allowed sm:inline-flex"><Plus size={15} aria-hidden="true" /> کسب‌وکار</Button>
             <Button variant="outline" size="sm" isLoading={isPending('logout')} onClick={handleLogout} className="border-white/30 bg-transparent text-xs text-white hover:bg-white/10"><LogOut size={15} aria-hidden="true" /> خروج</Button>
           </div>
         </div>
@@ -835,7 +834,7 @@ export default function DashboardPage() {
             {/* Tab Navigation */}
             <div className="workspace-toolbar flex items-center gap-2 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-3 shadow-xs">
               <button
-                onClick={() => setActiveTab('queue')}
+                onClick={() => { setHolidayPanelOpen(false); setActiveTab('queue'); }}
                 className={`px-4 py-2.5 rounded-xl font-bold text-xs transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
                   activeTab === 'queue'
                     ? 'workspace-toolbar-active bg-blue-600 text-white shadow-sm shadow-blue-500/20'
@@ -843,13 +842,13 @@ export default function DashboardPage() {
                 }`}
               >
                 <ListOrdered size={17} aria-hidden="true" /><span>صف و نوبت‌ها</span>
-                <span className="bg-white/20 text-white px-1.5 py-0.5 rounded-md text-[10px]">
+                <span className="workspace-toolbar-count px-1.5 py-0.5 rounded-md text-[10px]">
                   {detailsReady ? waitingAppointments.length : '—'}
                 </span>
               </button>
 
               <button
-                onClick={() => setActiveTab('services')}
+                onClick={() => { setHolidayPanelOpen(false); setActiveTab('services'); }}
                 className={`px-4 py-2.5 rounded-xl font-bold text-xs transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
                   activeTab === 'services'
                     ? 'workspace-toolbar-active bg-blue-600 text-white shadow-sm shadow-blue-500/20'
@@ -860,7 +859,7 @@ export default function DashboardPage() {
               </button>
 
               <button
-                onClick={() => setActiveTab('staff')}
+                onClick={() => { setHolidayPanelOpen(false); setActiveTab('staff'); }}
                 className={`px-4 py-2.5 rounded-xl font-bold text-xs transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
                   activeTab === 'staff'
                     ? 'workspace-toolbar-active bg-blue-600 text-white shadow-sm shadow-blue-500/20'
@@ -870,10 +869,10 @@ export default function DashboardPage() {
                 <Users size={17} aria-hidden="true" /><span>کارکنان ({detailsReady ? staffMembers.length : '—'})</span>
               </button>
 
-              {hasAdvancedScheduling && <button onClick={() => { setActiveTab('queue'); window.setTimeout(() => document.getElementById('holiday-settings')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 0); }} className="flex cursor-pointer items-center gap-2 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-100"><CalendarDays size={17} aria-hidden="true" />تنظیم رخصتی</button>}
+              {hasAdvancedScheduling && <button type="button" aria-expanded={holidayPanelOpen} aria-controls="holiday-settings" onClick={() => { setActiveTab('queue'); setHolidayPanelOpen(value => !value); }} className={`flex cursor-pointer items-center gap-2 whitespace-nowrap rounded-xl border px-4 py-2.5 text-xs font-bold ${holidayPanelOpen ? 'workspace-toolbar-active border-blue-600 bg-blue-600 text-white' : 'border-slate-200 bg-white text-slate-600'}`}><CalendarDays size={17} aria-hidden="true" />تنظیم رخصتی</button>}
 
               <button
-                onClick={() => setActiveTab('settings')}
+                onClick={() => { setHolidayPanelOpen(false); setActiveTab('settings'); }}
                 className={`px-4 py-2.5 rounded-xl font-bold text-xs transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
                   activeTab === 'settings'
                     ? 'workspace-toolbar-active bg-blue-600 text-white shadow-sm shadow-blue-500/20'
@@ -886,65 +885,60 @@ export default function DashboardPage() {
               {selectedBusiness && <button type="button" onClick={() => { const url = `${window.location.origin}/q/${selectedBusiness.slug}`; navigator.clipboard.writeText(url).then(() => setAlertMsg({ type: 'success', text: 'لینک نوبت‌گیری کپی شد.' })).catch(() => setAlertMsg({ type: 'error', text: 'کپی لینک انجام نشد؛ دوباره تلاش کنید.' })); }} className="mr-auto flex cursor-pointer items-center gap-2 whitespace-nowrap rounded-xl border border-blue-600 bg-white px-4 py-2.5 text-xs font-bold text-blue-700 hover:bg-blue-50"><Copy size={17} aria-hidden="true" />کپی لینک اشتراک</button>}
             </div>
 
+            {hasAdvancedScheduling && selectedBusiness && holidayPanelOpen && <div id="holiday-settings"><DailyBookingControl key={selectedBusiness.id + selectedDate} businessId={selectedBusiness.id} date={selectedDate} onChanged={() => {
+              queueRevision.current++; invalidateAppointmentReads();
+              void loadAppointmentsOnly(selectedBusiness.id, selectedDateRef.current);
+            }} /></div>}
+
+            {!detailsReady && <div className="workspace-tab-loading" role="status"><span className="navigation-spinner" aria-hidden="true" /><span>در حال بارگیری اطلاعات کسب‌وکار…</span></div>}
+
             {/* TAB 1: Queue & Appointments */}
             {detailsReady && activeTab === 'queue' && (
               <div className="space-y-6">
                 {/* DATE SELECTOR BAR FOR OWNER QUEUE */}
-                <div className="workspace-queue-filters rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
-                  <div className="flex items-center justify-between text-xs font-bold text-slate-800 px-1">
-                    <span className="flex items-center gap-1.5">
-                      <span>📅</span>
-                      <span>تاریخ و فیلتر صف</span>
-                    </span>
-                    <div className="flex items-center gap-2">
-                      {isAutoRefreshing ? (
-                        <span className="flex items-center gap-1 text-[10px] text-blue-600 font-bold bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-lg">
-                          <svg className="animate-spin h-2.5 w-2.5" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-                          </svg>
-                          در حال آپدیت...
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1 text-[10px] text-emerald-700 font-bold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping inline-block"></span>
-                          آپدیت خودکار فعال
-                        </span>
-                      )}
-                      <span className="text-blue-600 font-bold text-xs">{isoToAfghaniDate(selectedDate)}</span>
+                <section className="workspace-date-card" aria-label="انتخاب تاریخ صف">
+                  <header className="workspace-date-card-header">
+                    <div className="workspace-date-card-title">
+                      <span className="workspace-date-card-icon"><CalendarDays size={21} aria-hidden="true" /></span>
+                      <div>
+                        <h2>کدام روز را می‌خواهید مدیریت کنید؟</h2>
+                        <p>نوبت‌ها و آمار همان روز در پایین نمایش داده می‌شوند.</p>
+                      </div>
+                    </div>
+                    <div className="workspace-selected-date">
+                      <span>روز انتخاب‌شده</span>
+                      <strong>{isoToAfghaniDate(selectedDate)}</strong>
+                    </div>
+                  </header>
+
+                  <div className="workspace-date-card-body">
+                    <div className="workspace-date-shortcuts" aria-label="روزهای نزدیک">
+                      {upcomingDays.map((day) => (
+                        <button
+                          type="button"
+                          key={day.isoDate}
+                          onClick={() => handleDateChange(day.isoDate)}
+                          aria-pressed={selectedDate === day.isoDate}
+                          className={`workspace-date-chip ${selectedDate === day.isoDate ? 'is-selected' : ''}`}
+                        >
+                          {day.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="workspace-date-card-footer">
+                      <div className="workspace-calendar-picker">
+                        <span className="workspace-calendar-label">انتخاب تاریخ دقیق</span>
+                        <AfghanDatePicker min={todayStr} value={selectedDate} onChange={handleDateChange} variant="dashboard" />
+                      </div>
+                      <span className={`workspace-refresh-state ${isAutoRefreshing ? 'is-refreshing' : ''}`}>
+                        <span className={isAutoRefreshing ? 'navigation-spinner' : 'workspace-live-dot'} aria-hidden="true" />
+                        {isAutoRefreshing ? 'در حال به‌روزرسانی…' : 'اطلاعات به‌روز است'}
+                      </span>
                     </div>
                   </div>
+                </section>
 
-                  <div className="flex items-center gap-2 overflow-x-auto pb-1">
-                    {upcomingDays.map((day) => (
-                      <button
-                        key={day.isoDate}
-                        onClick={() => handleDateChange(day.isoDate)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
-                          selectedDate === day.isoDate
-                            ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
-                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200/60'
-                        }`}
-                      >
-                        {day.label}
-                      </button>
-                    ))}
-
-                    <div className="shrink-0 flex items-center gap-1 bg-slate-100 px-2.5 py-1 rounded-xl border border-slate-200">
-                      <span className="text-[11px] text-slate-500 font-bold whitespace-nowrap">تقویم:</span>
-                      <AfghanDatePicker min={todayStr} value={selectedDate} onChange={handleDateChange} />
-                    </div>
-                  </div>
-                  <div className="grid gap-3 border-t border-slate-100 pt-3 sm:grid-cols-2">
-                    <label className="flex items-center gap-2 text-xs font-bold text-slate-700"><span className="shrink-0">خدمت:</span><select value={queueServiceFilter} onChange={event => setQueueServiceFilter(event.target.value)} className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold"><option value="all">همهٔ خدمات</option>{services.map(service => <option key={service.id} value={service.id}>{service.name}</option>)}</select></label>
-                    <label className="flex items-center gap-2 text-xs font-bold text-slate-700"><span className="shrink-0">کارمند:</span><select value={hiddenStaffIds.length === 0 ? 'all' : ([...staffMembers.map(person => person.id), 'unassigned'].find(id => !hiddenStaffIds.includes(id)) || 'all')} onChange={event => { const value = event.target.value; const ids = [...staffMembers.map(person => person.id), 'unassigned']; setHiddenStaffIds(value === 'all' ? [] : ids.filter(id => id !== value)); }} className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold"><option value="all">همهٔ کارکنان</option>{staffMembers.map(person => <option key={person.id} value={person.id}>{person.name}</option>)}<option value="unassigned">بدون انتخاب کارمند</option></select></label>
-                  </div>
-                </div>
-
-                {hasAdvancedScheduling && selectedBusiness && <div id="holiday-settings"><DailyBookingControl key={selectedBusiness.id + selectedDate} businessId={selectedBusiness.id} date={selectedDate} onChanged={() => {
-                  queueRevision.current++; invalidateAppointmentReads();
-                  void loadAppointmentsOnly(selectedBusiness.id, selectedDateRef.current);
-                }} /></div>}
                 {pending.size > 0 && <p role="status" className="text-sm text-blue-700">در حال ثبت تغییرات…</p>}
                 {/* Capacity Status Banner */}
 

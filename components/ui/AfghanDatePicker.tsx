@@ -1,7 +1,7 @@
 'use client';
 import { AFGHANI_MONTHS, toPersianDigits, toJalali, jalaliToISO } from '@/lib/afghaniMonths';
 
-export function AfghanDatePicker({ value, min, onChange }: { value: string; min: string; onChange: (date: string) => void }) {
+export function AfghanDatePicker({ value, min, onChange, variant = 'compact' }: { value: string; min: string; onChange: (date: string) => void; variant?: 'compact' | 'dashboard' }) {
   const [gy, gm, gd] = value.split('-').map(Number);
   const [year, month, day] = toJalali(gy, gm, gd);
   const [minGy, minGm, minGd] = min.split('-').map(Number);
@@ -20,6 +20,11 @@ export function AfghanDatePicker({ value, min, onChange }: { value: string; min:
     if (iso) onChange(iso);
   }
   const style = 'bg-transparent text-slate-800 text-xs font-bold py-1 px-1 rounded-md focus:outline-2 focus:outline-blue-500 cursor-pointer';
+  if (variant === 'dashboard') return <div role="group" aria-label="انتخاب تاریخ هجری خورشیدی" className="afghan-date-dashboard" dir="rtl">
+    <label className="afghan-date-field"><span>روز</span><select aria-label="روز" value={day} onChange={e => select(year, month, Number(e.target.value))}>{validDays(year, month).map(d => <option key={d} value={d}>{toPersianDigits(d)}</option>)}</select></label>
+    <label className="afghan-date-field afghan-date-month"><span>ماه</span><select aria-label="ماه" value={month} onChange={e => select(year, Number(e.target.value), day)}>{AFGHANI_MONTHS.map((name, i) => <option key={name} value={i + 1} disabled={!validDays(year, i + 1).length}>{name}</option>)}</select></label>
+    <label className="afghan-date-field"><span>سال</span><select aria-label="سال" value={year} onChange={e => select(Number(e.target.value), month, day)}>{Array.from({ length: Math.max(21, year - firstYear + 1) }, (_, i) => firstYear + i).map(y => <option key={y} value={y}>{toPersianDigits(y)}</option>)}</select></label>
+  </div>;
   return <div role="group" aria-label="انتخاب تاریخ هجری خورشیدی" className="inline-flex items-center gap-0.5" dir="rtl">
     <select aria-label="روز" className={style} value={day} onChange={e => select(year, month, Number(e.target.value))}>{validDays(year, month).map(d => <option key={d} value={d}>{toPersianDigits(d)}</option>)}</select>
     <select aria-label="ماه" className={style} value={month} onChange={e => select(year, Number(e.target.value), day)}>{AFGHANI_MONTHS.map((name, i) => <option key={name} value={i + 1} disabled={!validDays(year, i + 1).length}>{name}</option>)}</select>

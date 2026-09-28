@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from './Button';
 import { supabase } from '@/lib/supabase/client';
 import { usePendingActions } from '@/lib/use-pending-actions';
@@ -8,8 +8,6 @@ import type { BookingDay, NoticeSummary } from '@/lib/booking-day';
 import { isoToAfghaniDate } from '@/lib/afghaniMonths';
 
 export function DailyBookingControl({ businessId, date, onChanged }: { businessId: string; date: string; onChanged: () => void }) {
-  const [expanded, setExpanded] = useState(false);
-  const panelId = useId();
   const [day, setDay] = useState<BookingDay | null>(null);
   const [notices, setNotices] = useState<NoticeSummary | null>(null);
   const [reason, setReason] = useState('');
@@ -63,28 +61,26 @@ export function DailyBookingControl({ businessId, date, onChanged }: { businessI
       } catch { setMessage('شروع ارسال انجام نشد؛ دوباره تلاش کنید.'); }
     });
   }
-  return <section className="space-y-3" aria-label="تنظیم رخصتی و پذیرش">
-    <div className="flex flex-wrap items-center gap-3">
-      <Button type="button" variant="outline" aria-expanded={expanded} aria-controls={panelId} onClick={() => setExpanded(value => !value)}>
-        {expanded ? 'بستن تنظیمات رخصتی' : 'تنظیم رخصتی و پذیرش'}
-      </Button>
-      {day?.is_closed && <span className="text-xs font-semibold text-rose-700">پذیرش روز انتخاب‌شده بسته است</span>}
+  return <section className="workspace-holiday-panel rounded-2xl border border-slate-200 bg-white p-4 space-y-3" aria-label="تنظیم رخصتی و پذیرش">
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <h3 className="font-bold">تنظیم رخصتی و پذیرش {day && '— ' + isoToAfghaniDate(day.booking_date)}</h3>
+      {day?.is_closed && <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700">پذیرش روز انتخاب‌شده بسته است</span>}
     </div>
-    <div id={panelId} hidden={!expanded} className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
-    <h3 className="font-bold">پذیرش نوبت برای روز انتخاب‌شده {day && '— ' + isoToAfghaniDate(day.booking_date)}</h3>
     {day ? <p className="text-sm">{day.is_closed ? 'دریافت نوبت روز انتخاب‌شده بسته است. دلیل: ' + day.reason : 'دریافت نوبت روز انتخاب‌شده باز است.'}</p> : <p role="status" className="text-sm">در حال دریافت وضعیت روز انتخاب‌شده…</p>}
     <fieldset disabled={!day || isPending('day')} className="space-y-3">
-      <label className="block text-sm">دلیل بستن پذیرش (اجباری)<input value={reason} maxLength={500} onChange={e => setReason(e.target.value)} placeholder="مثلاً رخصتی یا مریضی" className="mt-1 block w-full rounded-xl border p-2" /></label>
-      <div className="flex flex-wrap gap-2">
-        <Button type="button" variant="danger" isLoading={isPending('day')} onClick={() => update(true)}>بستن پذیرش روز انتخاب‌شده</Button>
-        {day?.is_closed && <Button type="button" isLoading={isPending('day')} onClick={() => update(false)}>بازکردن پذیرش روز انتخاب‌شده</Button>}
-      </div>
+      {day?.is_closed ? (
+        <Button type="button" isLoading={isPending('day')} onClick={() => update(false)}>بازکردن پذیرش روز انتخاب‌شده</Button>
+      ) : (
+        <>
+          <label className="block text-sm">دلیل بستن پذیرش (اجباری)<input value={reason} maxLength={500} onChange={e => setReason(e.target.value)} placeholder="مثلاً رخصتی یا مریضی" className="mt-1 block w-full rounded-xl border p-2" /></label>
+          <Button type="button" variant="danger" isLoading={isPending('day')} onClick={() => update(true)}>بستن پذیرش روز انتخاب‌شده</Button>
+        </>
+      )}
     </fieldset>
     {message && <p role="status" className="text-sm text-blue-800">{message}</p>}
     {notices && <div className="border-t pt-3 text-xs space-y-2"><p>پیام‌های انتقال: ارسال‌شده {notices.sent} · در انتظار {notices.pending} · در حال ارسال {notices.sending} · ناموفق {notices.failed}</p>
       <div className="flex gap-2"><Button size="sm" variant="outline" isLoading={isPending('check')} onClick={() => runAction('check', refresh)}>بررسی ارسال</Button>
       {(notices.pending > 0 || notices.failed > 0) && <Button size="sm" isLoading={isPending('notices')} onClick={retry}>ارسال باقی‌مانده / تلاش دوباره</Button>}</div>
     </div>}
-    </div>
   </section>;
 }

@@ -440,45 +440,49 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
         )}
 
         {/* DATE SELECTION BAR */}
-        <div className="booking-date-picker bg-white rounded-2xl border border-slate-200 p-3.5 shadow-xs space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-3 text-sm font-bold text-slate-800 px-1">
-            <span className="flex items-center gap-1.5">
-              <CalendarDays size={18} className="text-blue-600" aria-hidden="true" />
-              <span>کدام روز می‌توانید بیایید؟</span>
-            </span>
-            <span className="flex items-center gap-2">
-              {dateLoading && (
-                <svg className="animate-spin h-3.5 w-3.5 text-blue-500" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-                </svg>
-              )}
-              <span className="text-blue-700 font-extrabold">{isoToAfghaniDate(selectedDate)}</span>
-            </span>
-          </div>
+        <section className="booking-date-card workspace-date-card" aria-label="انتخاب روز نوبت">
+          <header className="workspace-date-card-header">
+            <div className="workspace-date-card-title">
+              <span className="workspace-date-card-icon"><CalendarDays size={21} aria-hidden="true" /></span>
+              <div>
+                <h2>کدام روز می‌توانید بیایید؟</h2>
+                <p>یک روز را انتخاب کنید تا وضعیت پذیرش و نوبت‌های همان روز نمایش داده شود.</p>
+              </div>
+            </div>
+            <div className="workspace-selected-date">
+              <span>روز انتخاب‌شده</span>
+              <strong>{isoToAfghaniDate(selectedDate)}</strong>
+            </div>
+          </header>
 
-          <div className="flex items-center gap-2 overflow-x-auto pb-1">
-            {upcomingDays.map((day) => (
-              <button
-                key={day.isoDate}
-                onClick={() => handleDateChange(day.isoDate)}
-                disabled={dateLoading}
-                className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer disabled:opacity-60 ${
-                  selectedDate === day.isoDate
-                    ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200/60'
-                }`}
-              >
-                {day.label}
-              </button>
-            ))}
+          <div className="workspace-date-card-body">
+            <div className="workspace-date-shortcuts" aria-label="روزهای قابل انتخاب">
+              {upcomingDays.map((day) => (
+                <button
+                  type="button"
+                  key={day.isoDate}
+                  onClick={() => handleDateChange(day.isoDate)}
+                  disabled={dateLoading}
+                  aria-pressed={selectedDate === day.isoDate}
+                  className={`workspace-date-chip disabled:cursor-wait disabled:opacity-60 ${selectedDate === day.isoDate ? 'is-selected' : ''}`}
+                >
+                  {day.label}
+                </button>
+              ))}
+            </div>
 
-            <div className="shrink-0 flex items-center gap-1 bg-slate-100 px-2.5 py-1.5 rounded-xl border border-slate-200">
-              <span className="text-[11px] text-slate-500 font-bold whitespace-nowrap">تقویم:</span>
-              <AfghanDatePicker min={todayStr} value={selectedDate} onChange={handleDateChange} />
+            <div className="workspace-date-card-footer">
+              <div className="workspace-calendar-picker">
+                <span className="workspace-calendar-label">انتخاب تاریخ دقیق</span>
+                <AfghanDatePicker min={todayStr} value={selectedDate} onChange={handleDateChange} variant="dashboard" />
+              </div>
+              <span className={`workspace-refresh-state ${dateLoading ? 'is-refreshing' : ''}`}>
+                <span className={dateLoading ? 'navigation-spinner' : 'workspace-live-dot'} aria-hidden="true" />
+                {dateLoading ? 'در حال بررسی روز…' : 'روز انتخاب‌شده آماده است'}
+              </span>
             </div>
           </div>
-        </div>
+        </section>
 
         {dateLoading ? <p role="status" className="p-4 text-blue-700">در حال بررسی پذیرش روز انتخاب‌شده…</p> : queueError ? (
           <div role="alert" className="rounded-xl bg-amber-50 p-4">{queueError}<button type="button" className="mr-2 underline" onClick={() => { if (businessRef.current) void loadAppointmentsForDate(businessRef.current.id, selectedDateRef.current); }}>تلاش دوباره</button></div>
