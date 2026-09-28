@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, use, useCallback, useRef } from 'react';
 import { NavigationLink as Link } from '@/components/ui/NavigationLink';
-import Image from 'next/image';
 import { createLiveRefresh } from '@/lib/live-refresh';
 import { getBookingDay, type BookingDay } from '@/lib/booking-day';
 import { usePendingActions } from '@/lib/use-pending-actions';
@@ -25,6 +24,7 @@ import { Badge } from '@/components/ui/Badge';
 import { AfghanDatePicker } from '@/components/ui/AfghanDatePicker';
 import { getUpcomingDaysAfghani, isoToAfghaniDate, getKabulTodayISO } from '@/lib/afghaniMonths';
 import { getBookingDeviceId, normalizeBookingName } from '@/lib/booking-device';
+import { CalendarDays, Clock3, MapPin, Phone, Store, Ticket, Users } from 'lucide-react';
 
 interface PublicBookingPageProps {
   params: Promise<{ slug: string }>;
@@ -405,24 +405,27 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
   return (
     <div className="booking-app min-h-screen flex flex-col font-sans pb-12">
       {/* Public Header */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-20 shadow-2xs">
-        <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <Image width={92} height={50} sizes="92px" src="/logo-transparent.png" alt="نوبتک" className="h-9 w-auto object-contain" />
+      <header className="booking-public-header sticky top-0 z-20 text-white">
+        <div className="mx-auto flex min-h-20 max-w-5xl items-center justify-between gap-4 px-4 py-4">
+          <Link href="/" className="flex min-w-0 items-center gap-3">
+            <span className="booking-header-icon"><CalendarDays size={24} aria-hidden="true" /></span>
+            <span className="min-w-0"><strong className="block truncate text-lg sm:text-2xl">نوبتک - {business.name}</strong>{business.description && <small className="mt-1 block truncate text-[11px] text-blue-100/80 sm:text-xs">{business.description}</small>}</span>
           </Link>
           <div className="flex items-center gap-2">
-            <span className="flex items-center gap-1.5 text-xs text-emerald-600 font-bold bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
-              زنده
-            </span>
             {myAppointments.length > 0 && (
-              <Badge variant="blue" className="text-[11px] font-bold">{myAppointments.length} نوبت فعال</Badge>
+              <span className="booking-active-count">نوبت فعال: {myAppointments.length.toLocaleString('fa-AF')}</span>
             )}
           </div>
         </div>
+        <div className="booking-business-meta"><div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3 text-xs text-blue-50/90">
+          <span><Store size={16} aria-hidden="true" />{business.category === 'barbershop' ? 'سلمانی' : business.category || 'کسب‌وکار'}</span>
+          {business.address && <span><MapPin size={16} aria-hidden="true" />{business.address}</span>}
+          {(business.opening_time || business.closing_time) && <span><Clock3 size={16} aria-hidden="true" />ساعت کاری: {business.opening_time?.slice(0,5) || '—'} تا {business.closing_time?.slice(0,5) || '—'}{business.opening_time && business.closing_time && business.closing_time < business.opening_time ? ' (روز بعد)' : ''}</span>}
+          {business.phone && <span dir="ltr"><Phone size={16} aria-hidden="true" />{business.phone}</span>}
+        </div></div>
       </header>
 
-      <main className="max-w-3xl w-full mx-auto px-4 py-6 space-y-6">
+      <main className="max-w-5xl w-full mx-auto px-4 py-6 space-y-6">
         {/* Action Alert */}
         {actionAlert && (
           <div className={`p-4 rounded-xl border text-xs font-semibold flex items-center justify-between transition-all ${
@@ -433,36 +436,12 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
           </div>
         )}
 
-        {/* Business Branding Card */}
-        <div className="booking-brand text-white rounded-3xl p-6 sm:p-8 shadow-xl shadow-blue-600/15 relative overflow-hidden space-y-4">
-          <div className="flex items-start gap-4">
-            <div className="w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center text-3xl font-extrabold border border-white/20 shrink-0">
-              {business.logo_url || business.name.charAt(0)}
-            </div>
-            <div className="space-y-1">
-              <h1 className="text-2xl sm:text-3xl font-extrabold">{business.name}</h1>
-              {business.description && (
-                <p className="text-xs sm:text-sm text-blue-100/90 leading-relaxed max-w-xl">{business.description}</p>
-              )}
-            </div>
-          </div>
-          {(
-            <div className="pt-3 border-t border-white/10 flex flex-wrap gap-4 text-xs text-blue-100">
-              {(business.opening_time || business.closing_time) && <span>ساعت کاری: {business.opening_time?.slice(0,5) || 'تعیین نشده'} تا {business.closing_time?.slice(0,5) || 'تعیین نشده'}{business.opening_time && business.closing_time && business.closing_time < business.opening_time ? ' (روز بعد)' : ''} — به وقت افغانستان</span>}
-              {business.address && <span>📍 {business.address}</span>}
-              {business.phone && <span className="dir-ltr text-right font-mono">📞 {business.phone}</span>}
-              <span>ظرفیت کارمند انتخاب‌شده در روز {isoToAfghaniDate(selectedDate)}: {!selectedStaffId && staffList.length > 0 ? 'ابتدا کارمند را انتخاب کنید' : maxCapacity === 0 && planDailyLimit === null ? 'بدون محدودیت' : Math.min(maxCapacity || Infinity, planDailyLimit ?? Infinity).toLocaleString('fa-AF') + ' نوبت'}</span>
-              {(maxCapacity > 0 || planDailyLimit !== null) && <span role="status">{capacityFull ? 'ظرفیت این روز تکمیل شده؛ روز دیگری انتخاب کنید.' : Math.min(businessRemaining, maxCapacity > 0 ? Math.max(0, maxCapacity - dateAppointments.filter(a => (a.staff_id || '') === selectedStaffId && a.status !== 'cancelled').length) : Infinity).toLocaleString('fa-AF') + ' نوبت باقی مانده'}</span>}
-            </div>
-          )}
-        </div>
-
         {/* DATE SELECTION BAR */}
-        <div className="booking-date-picker bg-white rounded-2xl border border-slate-200 p-3.5 shadow-xs space-y-2.5">
-          <div className="flex items-center justify-between text-xs font-bold text-slate-800 px-1">
+        <div className="booking-date-picker bg-white rounded-2xl border border-slate-200 p-3.5 shadow-xs space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 text-sm font-bold text-slate-800 px-1">
             <span className="flex items-center gap-1.5">
-              <span>📅</span>
-              <span>انتخاب تاریخ نوبت‌دهی:</span>
+              <CalendarDays size={18} className="text-blue-600" aria-hidden="true" />
+              <span>کدام روز می‌توانید بیایید؟</span>
             </span>
             <span className="flex items-center gap-2">
               {dateLoading && (
@@ -471,7 +450,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
                 </svg>
               )}
-              <span className="text-blue-600 font-bold text-xs">{isoToAfghaniDate(selectedDate)}</span>
+              <span className="text-blue-700 font-extrabold">{isoToAfghaniDate(selectedDate)}</span>
             </span>
           </div>
 
@@ -481,7 +460,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
                 key={day.isoDate}
                 onClick={() => handleDateChange(day.isoDate)}
                 disabled={dateLoading}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer disabled:opacity-60 ${
+                className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer disabled:opacity-60 ${
                   selectedDate === day.isoDate
                     ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
                     : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200/60'
@@ -508,29 +487,24 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
           </section>
         ) : <>
         {/* Live Queue Summary Cards */}
-        <div className="grid grid-cols-3 gap-3">
-          <div className="bg-white rounded-2xl border border-blue-200 p-4 text-center shadow-xs">
-            <span className="text-[11px] font-bold text-blue-600 block">نوبت جاری</span>
-            <span className="text-2xl sm:text-3xl font-black text-blue-900 font-mono mt-1 block">
-              {servingAppointment ? `#${servingAppointment.queue_number}` : '—'}
-            </span>
-            <span className="text-[10px] text-blue-500 font-medium mt-1 block">در حال خدمت</span>
+        <div className="booking-summary-grid grid grid-cols-3 gap-3">
+          <div className="booking-summary-card booking-summary-blue">
+            <span className="booking-summary-icon"><Ticket size={24} aria-hidden="true" /></span>
+            <span><span className="text-[11px] font-bold text-blue-600 block">نوبت جاری</span><strong className="text-2xl sm:text-3xl font-black text-blue-900 font-mono mt-1 block">{servingAppointment ? `#${servingAppointment.queue_number}` : '—'}</strong><span className="text-[10px] text-blue-500 font-medium mt-1 block">در حال خدمت</span></span>
           </div>
 
-          <div className="bg-white rounded-2xl border border-amber-200 p-4 text-center shadow-xs">
-            <span className="text-[11px] font-bold text-amber-600 block">
+          <div className="booking-summary-card booking-summary-amber">
+            <span className="booking-summary-icon"><Users size={24} aria-hidden="true" /></span>
+            <span><span className="text-[11px] font-bold text-amber-600 block">
               {!showBookingForm && selectedAppointment ? 'افراد قبل از شما' : 'افراد در صف'}
-            </span>
-            <span className="text-2xl sm:text-3xl font-black text-amber-900 font-mono mt-1 block">
+            </span><strong className="text-2xl sm:text-3xl font-black text-amber-900 font-mono mt-1 block">
               {!showBookingForm && selectedAppointment ? peopleAheadCount : bookingAhead}
-            </span>
-            <span className="text-[10px] text-amber-600 font-medium mt-1 block">نوبت در انتظار</span>
+            </strong><span className="text-[10px] text-amber-600 font-medium mt-1 block">نوبت در انتظار</span></span>
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200 p-4 text-center shadow-xs">
-            <span className="text-[11px] font-bold text-slate-600 block">زمان انتظار</span>
-            <span className="text-2xl sm:text-3xl font-black text-slate-900 font-mono mt-1 block">~{estimatedWaitTime}</span>
-            <span className="text-[10px] text-slate-500 font-medium mt-1 block">دقیقه</span>
+          <div className="booking-summary-card booking-summary-slate">
+            <span className="booking-summary-icon"><Clock3 size={24} aria-hidden="true" /></span>
+            <span><span className="text-[11px] font-bold text-slate-600 block">زمان انتظار</span><strong className="text-2xl sm:text-3xl font-black text-slate-900 font-mono mt-1 block">~{estimatedWaitTime}</strong><span className="text-[10px] text-slate-500 font-medium mt-1 block">دقیقه</span></span>
           </div>
         </div>
 
