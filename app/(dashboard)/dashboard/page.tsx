@@ -479,7 +479,7 @@ export default function DashboardPage() {
           });
 
           if (error || !updated) {
-            setAlertMsg({ type: 'error', text: `خطا در ویرایش خدمت: لطفاً دوباره تلاش کنید.` });
+            setAlertMsg({ type: 'error', text: error || 'ویرایش خدمت انجام نشد. لطفاً دوباره تلاش کنید.' });
           } else {
             setServices(previous => previous.map(s => s.id === updated.id ? updated : s));
             setAlertMsg({ type: 'success', text: 'خدمت با موفقیت ویرایش شد.' });
@@ -494,7 +494,7 @@ export default function DashboardPage() {
           });
 
           if (error || !newSrv) {
-            setAlertMsg({ type: 'error', text: `خطا در ایجاد خدمت: لطفاً دوباره تلاش کنید.` });
+            setAlertMsg({ type: 'error', text: error || 'ایجاد خدمت انجام نشد. لطفاً دوباره تلاش کنید.' });
           } else {
             setServices(previous => [...previous.filter(s => s.id !== newSrv.id), newSrv]);
             setAlertMsg({ type: 'success', text: 'خدمت جدید ثبت شد.' });
@@ -520,7 +520,7 @@ export default function DashboardPage() {
         const newStatus = !service.is_active;
         const { service: updated, error } = await updateService(service.id, { is_active: newStatus });
         if (error || !updated) {
-          setAlertMsg({ type: 'error', text: `خطا در تغییر وضعیت خدمت: لطفاً دوباره تلاش کنید.` });
+          setAlertMsg({ type: 'error', text: error || 'تغییر وضعیت خدمت انجام نشد. لطفاً دوباره تلاش کنید.' });
         } else {
           setServices(previous => previous.map(s => s.id === updated.id ? updated : s));
         }
@@ -561,7 +561,7 @@ export default function DashboardPage() {
         if (editingStaff) {
           const { staff: updated, error } = await updateStaff(editingStaff.id, { name: staffName, max_daily_appointments: capacity });
           if (error || !updated) {
-            setAlertMsg({ type: 'error', text: `خطا در ویرایش کارمند: لطفاً دوباره تلاش کنید.` });
+            setAlertMsg({ type: 'error', text: error || 'ویرایش کارمند انجام نشد. لطفاً دوباره تلاش کنید.' });
           } else {
             setStaffMembers(previous => previous.map(st => st.id === updated.id ? updated : st));
             setAlertMsg({ type: 'success', text: 'نام کارمند به روزرسانی شد.' });
@@ -575,7 +575,7 @@ export default function DashboardPage() {
           });
 
           if (error || !newSt) {
-            setAlertMsg({ type: 'error', text: `خطا در ثبت کارمند: لطفاً دوباره تلاش کنید.` });
+            setAlertMsg({ type: 'error', text: error || 'ثبت کارمند انجام نشد. لطفاً دوباره تلاش کنید.' });
           } else {
             setStaffMembers(previous => [...previous.filter(st => st.id !== newSt.id), newSt]);
             setAlertMsg({ type: 'success', text: 'کارمند جدید ثبت شد.' });
@@ -599,7 +599,7 @@ export default function DashboardPage() {
         const newStatus = !st.is_active;
         const { staff: updated, error } = await updateStaff(st.id, { is_active: newStatus });
         if (error || !updated) {
-          setAlertMsg({ type: 'error', text: `خطا در تغییر وضعیت پرسنل: لطفاً دوباره تلاش کنید.` });
+          setAlertMsg({ type: 'error', text: error || 'تغییر وضعیت کارمند انجام نشد. لطفاً دوباره تلاش کنید.' });
         } else {
           setStaffMembers(previous => previous.map(s => s.id === updated.id ? updated : s));
         }
