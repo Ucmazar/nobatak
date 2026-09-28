@@ -48,7 +48,8 @@ export async function POST(request: Request) {
       p_date: body.date, p_request: body.requestId,
     });
     if (error) {
-      const message = error.code === '42501' ? 'دسترسی مجاز نیست.'
+      const message = error.message.includes('PLAN_FEATURE_UNAVAILABLE') ? 'ثبت رخصتی در پلن رایگان فعال نیست.'
+        : error.code === '42501' ? 'دسترسی مجاز نیست.'
         : error.message.includes('NO_AVAILABLE_DAY') ? 'تا یک سال آینده روز باز با ظرفیت کافی یافت نشد؛ هیچ تغییری انجام نشد.'
         : /TRANSFER_CAPACITY_CONFLICT|DAILY_CAPACITY_REACHED/.test(error.message) ? 'ظرفیت روز مقصد با نوبت‌های تکمیل‌شده یا تعداد انتقال سازگار نیست؛ هیچ تغییری انجام نشد.'
         : /INVALID_STAFF|STAFF_REQUIRED/.test(error.message) ? 'کارمند یکی از نوبت‌ها فعال نیست؛ ابتدا آن را اصلاح کنید. هیچ نوبتی منتقل نشد.'

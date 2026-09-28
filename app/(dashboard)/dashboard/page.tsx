@@ -54,8 +54,13 @@ export default function DashboardPage() {
   const [businesses, setBusinesses] = useState<Business[]>(bootstrap?.businesses || []);
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(() => bootstrap?.businesses.find(b => b.is_active !== false) || bootstrap?.businesses[0] || null);
 
-  const businessLimit = profile?.max_businesses === undefined ? 1 : profile.max_businesses;
+  const planDaysRemaining = profile?.plan_code !== 'free' && profile?.plan_expires_on
+    ? Math.round((Date.parse(`${profile.plan_expires_on}T00:00:00Z`) - Date.parse(`${todayStr}T00:00:00Z`)) / 86400000)
+    : null;
+  const planExpired = planDaysRemaining !== null && planDaysRemaining < 0;
+  const businessLimit = planExpired ? 1 : profile?.max_businesses === undefined ? 1 : profile.max_businesses;
   const canCreateBusiness = businessLimit === null || businesses.length < businessLimit;
+  const hasAdvancedScheduling = profile?.plan_code !== 'free' && !planExpired;
 
   // Active Tab
   const [activeTab, setActiveTab] = useState<'queue' | 'services' | 'staff' | 'settings'>('queue');
@@ -516,8 +521,8 @@ export default function DashboardPage() {
       try {
         if (!staffName || !selectedBusiness) return;
 
-        const capacity = Number(staffCapacity);
-        if (!staffCapacity.trim() || !Number.isInteger(capacity) || capacity < 0 || capacity > 2147483647) { setAlertMsg({ type: 'error', text: 'ظرفیت باید عدد صحیح صفر یا بیشتر باشد.' }); return; }
+        const capacity = hasAdvancedScheduling ? Number(staffCapacity) : 0;
+        if (hasAdvancedScheduling && (!staffCapacity.trim() || !Number.isInteger(capacity) || capacity < 0 || capacity > 2147483647)) { setAlertMsg({ type: 'error', text: 'ظرفیت باید عدد صحیح صفر یا بیشتر باشد.' }); return; }
         setStaffSaving(true);
 
         if (editingStaff) {
@@ -777,6 +782,8 @@ export default function DashboardPage() {
         </div>
       </header>
 
+      {planDaysRemaining !== null && planDaysRemaining <= 3 && <div className="mx-auto w-full max-w-7xl px-4 pt-4 sm:px-6 lg:px-8"><div role="status" className={`rounded-2xl border p-4 text-sm font-semibold ${planExpired ? 'border-rose-300 bg-rose-50 text-rose-900' : 'border-amber-300 bg-amber-50 text-amber-900'}`}>{planExpired ? 'مدت پلن شما به پایان رسیده است. برای تمدید با مدیریت نوبتک ارتباط بگیرید؛ تنظیمات پلن سفارشی شما محفوظ است.' : planDaysRemaining === 0 ? 'پلن شما امروز به پایان می‌رسد. برای تمدید با مدیریت نوبتک ارتباط بگیرید.' : `پلن شما تا ${planDaysRemaining.toLocaleString('fa-AF')} روز دیگر به پایان می‌رسد. برای تمدید با مدیریت نوبتک ارتباط بگیرید.`}</div></div>}
+
       <div className="max-w-7xl mx-auto px-4 pt-4 text-xs text-slate-600" role="status">
         کسب‌وکارهای شما: {businesses.length} / {businessLimit === null ? 'نامحدود' : businessLimit}
         {!canCreateBusiness && <span className="mr-2 text-amber-700">برای ایجاد کسب‌وکار جدید، از مدیر بخواهید سقف شما را افزایش دهد.</span>}
@@ -835,7 +842,7 @@ export default function DashboardPage() {
                     <div className="flex items-center gap-2">
                       <h1 className="text-xl font-extrabold text-slate-900">{selectedBusiness.name}</h1>
                       <Badge variant={profile?.plan_code === 'custom' ? 'amber' : profile?.plan_code === 'legacy' ? 'slate' : 'emerald'}>
-                        {profile?.plan_code === 'custom' ? 'پلن سفارشی' : profile?.plan_code === 'legacy' ? 'تنظیمات قبلی' : 'پلن آغاز رایگان'}
+                        {profile?.plan_code === 'growth' ? 'پلن رشد' : profile?.plan_code === 'custom' ? 'پلن سفارشی' : profile?.plan_code === 'legacy' ? 'تنظیمات قبلی' : 'پلن آغاز رایگان'}
                       </Badge>
                     </div>
                     <p className="text-xs text-slate-500">
@@ -964,7 +971,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                {selectedBusiness && <DailyBookingControl key={selectedBusiness.id + selectedDate} businessId={selectedBusiness.id} date={selectedDate} onChanged={() => {
+                {hasAdvancedScheduling && selectedBusiness && <DailyBookingControl key={selectedBusiness.id + selectedDate} businessId={selectedBusiness.id} date={selectedDate} onChanged={() => {
                   queueRevision.current++; invalidateAppointmentReads();
                   void loadAppointmentsOnly(selectedBusiness.id, selectedDateRef.current);
                 }} />}
@@ -1195,7 +1202,8 @@ export default function DashboardPage() {
                             👤
                           </div>
                           <div>
-                            <h4 className="font-bold text-slate-900 text-sm">{st.name}</h4><p className="text-xs text-slate-500">ظرفیت روزانه: {st.max_daily_appointments === 0 ? 'نامحدود' : (st.max_daily_appointments ?? 20).toLocaleString('fa-AF')}</p>
+                            <h4 className="font-bold text-slate-900 text-sm">{st.name}</h4>
+                            {hasAdvancedScheduling && <p className="text-xs text-slate-500">ظرفیت روزانه: {st.max_daily_appointments === 0 ? 'نامحدود' : (st.max_daily_appointments ?? 20).toLocaleString('fa-AF')}</p>}
                             <Badge variant={st.is_active ? 'emerald' : 'slate'} className="mt-1">
                               {st.is_active ? 'فعال' : 'غیرفعال'}
                             </Badge>
@@ -1427,7 +1435,7 @@ export default function DashboardPage() {
       >
         <form onSubmit={handleSaveStaff} className="space-y-4">
           <fieldset disabled={isPending(editingStaff ? 'staff:' + editingStaff.id : 'staff-new')} aria-busy={isPending(editingStaff ? 'staff:' + editingStaff.id : 'staff-new')} className="space-y-4 min-w-0">
-          <Input type="number" min="0" max="2147483647" step="1" label="ظرفیت روزانهٔ این کارمند" value={staffCapacity} onChange={e => setStaffCapacity(e.target.value)} helperText="صفر یعنی نامحدود. ظرفیت هر کارمند جدا محاسبه می‌شود." required />
+            {hasAdvancedScheduling && <Input type="number" min="0" max="2147483647" step="1" label="ظرفیت روزانهٔ این کارمند" value={staffCapacity} onChange={e => setStaffCapacity(e.target.value)} helperText="صفر یعنی نامحدود. ظرفیت هر کارمند جدا محاسبه می‌شود." required />}
           <Input
             label="نام و نام خانوادگی ارائه‌دهنده *"
             placeholder="مثلاً: علی رضایی"
