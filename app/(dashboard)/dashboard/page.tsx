@@ -33,6 +33,7 @@ import { queueAhead } from '@/lib/queue';
 const BusinessQRCode = dynamic(() => import('@/components/ui/BusinessQRCode').then(module => module.BusinessQRCode), { loading: () => <p role="status">در حال آماده‌سازی برگه…</p> });
 import { AfghanDatePicker } from '@/components/ui/AfghanDatePicker';
 import { getUpcomingDaysAfghani, isoToAfghaniDate, getKabulTodayISO } from '@/lib/afghaniMonths';
+import { CalendarDays, Copy, ListOrdered, LogOut, Plus, Scissors, Settings, Users } from 'lucide-react';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -100,6 +101,7 @@ export default function DashboardPage() {
   // Appointments State & Modals
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [hiddenStaffIds, setHiddenStaffIds] = useState<string[]>([]);
+  const [queueServiceFilter, setQueueServiceFilter] = useState('all');
   const [appointmentFilter, setAppointmentFilter] = useState<'all' | 'waiting' | 'serving' | 'completed' | 'cancelled'>('all');
   const [isAddAppointmentModalOpen, setIsAddAppointmentModalOpen] = useState(false);
   const [custName, setCustName] = useState('');
@@ -274,6 +276,7 @@ export default function DashboardPage() {
   const handleSelectBusiness = async (biz: Business) => {
     setDetailsReady(false);
     setHiddenStaffIds([]);
+    setQueueServiceFilter('all');
     setSelectedBusiness(biz);
     selectedBusinessRef.current = biz;
     if (biz.is_active !== false) await loadBusinessDetails(biz.id, selectedDateRef.current);
@@ -709,19 +712,18 @@ export default function DashboardPage() {
     });
   };
 
-  // Display Name of Logged-in User
-  const displayName = profile?.full_name || user?.user_metadata?.full_name || user?.email || 'کاربر گرامی';
-
   // Queue Calculations for selected date
   const dateAppointments = appointments.filter(a => a.appointment_date === selectedDate);
-  const currentServingApp = dateAppointments.find(a => a.status === 'serving');
-  const waitingAppointments = dateAppointments.filter(a => a.status === 'waiting');
-  const completedAppointments = dateAppointments.filter(a => a.status === 'completed');
-  const avgDuration = services.length > 0 ? services[0].duration_minutes : 20;
+  const staffAppointments = dateAppointments.filter(a => !hiddenStaffIds.includes(a.staff_id || 'unassigned'));
+  const scopedAppointments = staffAppointments.filter(a => queueServiceFilter === 'all' || a.service_id === queueServiceFilter);
+  const currentServingApp = scopedAppointments.find(a => a.status === 'serving');
+  const waitingAppointments = scopedAppointments.filter(a => a.status === 'waiting');
+  const completedAppointments = scopedAppointments.filter(a => a.status === 'completed');
+  const selectedQueueService = services.find(service => service.id === queueServiceFilter);
+  const avgDuration = selectedQueueService?.duration_minutes ?? (services.length > 0 ? services[0].duration_minutes : 20);
   const estWaitNewJoiner = waitingAppointments.length * avgDuration;
 
-  const staffAppointments = dateAppointments.filter(a => !hiddenStaffIds.includes(a.staff_id || 'unassigned'));
-  const filteredAppointments = staffAppointments.filter(a => {
+  const filteredAppointments = scopedAppointments.filter(a => {
     if (appointmentFilter === 'all') return true;
     return a.status === appointmentFilter;
   });
@@ -731,65 +733,25 @@ export default function DashboardPage() {
   return (
     <div className="workspace-app min-h-screen flex flex-col font-sans">
       {/* Top Header Bar */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-2xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link href="/" className="flex items-center gap-2">
-              <Image src="/logo-transparent.png" width={184} height={100} sizes="(max-width: 640px) 92px, 184px" alt="نوبتک" className="h-10 w-auto object-contain" />
-            </Link>
-
-            {/* <span className="flex items-center gap-1.5 text-xs text-emerald-600 font-bold bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg hidden sm:inline-flex">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
-              به‌روز
-            </span> */}
-          </div>
-
-          <div className="flex items-center gap-4">
-            <span className="text-xs text-slate-600 font-medium">
-              سلام، <strong className="text-slate-900 font-bold">{displayName} 👋</strong>
-            </span>
-
-            {/* Business Switcher Dropdown */}
-            {businesses.length > 0 && selectedBusiness && (
-              <select
-                disabled={pending.size > 0}
-                value={selectedBusiness.id}
-                onChange={(e) => {
-                  const b = businesses.find(item => item.id === e.target.value);
-                  if (b) handleSelectBusiness(b);
-                }}
-                className="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl px-3 py-2 border-0 focus:ring-2 focus:ring-blue-500 focus:outline-none cursor-pointer"
-              >
-                {businesses.map(b => (
-                  <option key={b.id} value={b.id}>{b.name}{b.is_active === false ? ' (غیرفعال)' : ''}</option>
-                ))}
-              </select>
-            )}
-
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={!canCreateBusiness} onClick={() => setIsBizModalOpen(true)}
-              className="text-xs hidden sm:inline-flex"
-            >
-              + کسب‌وکار جدید
-            </Button>
-
-            <Button variant="outline" size="sm" isLoading={isPending('logout')} onClick={handleLogout} className="text-xs text-rose-600 border-rose-200 hover:bg-rose-50">
-              خروج
-            </Button>
+      <header className="workspace-header sticky top-0 z-30 text-white">
+        <div className="mx-auto flex min-h-20 max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
+          <Link href="/" className="flex items-center gap-3">
+            <Image src="/logo-transparent.png" width={184} height={100} sizes="92px" alt="نوبتک" className="h-10 w-auto object-contain" priority />
+            <strong className="text-sm sm:text-xl">نوبتک - {isoToAfghaniDate(selectedDate)}</strong>
+          </Link>
+          <div className="workspace-header-actions flex min-w-0 flex-wrap items-center gap-2">
+            {selectedBusiness && <span className="hidden max-w-48 truncate text-xs font-bold text-blue-100 md:block">داشبورد {selectedBusiness.name}</span>}
+            {selectedBusiness && <Badge variant={profile?.plan_code === 'custom' ? 'amber' : profile?.plan_code === 'legacy' ? 'slate' : 'emerald'}>{profile?.plan_code === 'growth' ? 'پلن رشد' : profile?.plan_code === 'custom' ? 'پلن سفارشی' : profile?.plan_code === 'legacy' ? 'تنظیمات قبلی' : 'پلن آغاز'}</Badge>}
+            {businesses.length > 0 && selectedBusiness && <select disabled={pending.size > 0} value={selectedBusiness.id} onChange={(event) => { const business = businesses.find(item => item.id === event.target.value); if (business) void handleSelectBusiness(business); }} className="workspace-business-switcher cursor-pointer rounded-xl border border-white/25 bg-white px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-cyan-300">{businesses.map(business => <option key={business.id} value={business.id}>{business.name}{business.is_active === false ? ' (غیرفعال)' : ''}</option>)}</select>}
+            <Button size="sm" variant="outline" disabled={!canCreateBusiness} onClick={() => setIsBizModalOpen(true)} className="hidden border-white/30 bg-transparent text-xs text-white hover:bg-white/10 sm:inline-flex"><Plus size={15} aria-hidden="true" /> کسب‌وکار</Button>
+            <Button variant="outline" size="sm" isLoading={isPending('logout')} onClick={handleLogout} className="border-white/30 bg-transparent text-xs text-white hover:bg-white/10"><LogOut size={15} aria-hidden="true" /> خروج</Button>
           </div>
         </div>
       </header>
 
-      {planDaysRemaining !== null && planDaysRemaining <= 3 && <div className="mx-auto w-full max-w-7xl px-4 pt-4 sm:px-6 lg:px-8"><div role="status" className={`rounded-2xl border p-4 text-sm font-semibold ${planExpired ? 'border-rose-300 bg-rose-50 text-rose-900' : 'border-amber-300 bg-amber-50 text-amber-900'}`}>{planExpired ? 'مدت پلن شما به پایان رسیده است. برای تمدید با مدیریت نوبتک ارتباط بگیرید؛ تنظیمات پلن سفارشی شما محفوظ است.' : planDaysRemaining === 0 ? 'پلن شما امروز به پایان می‌رسد. برای تمدید با مدیریت نوبتک ارتباط بگیرید.' : `پلن شما تا ${planDaysRemaining.toLocaleString('fa-AF')} روز دیگر به پایان می‌رسد. برای تمدید با مدیریت نوبتک ارتباط بگیرید.`}</div></div>}
+      {planDaysRemaining !== null && planDaysRemaining <= 3 && <div className="mx-auto w-full max-w-7xl px-4 pt-4 sm:px-6 lg:px-8"><div role="status" className={`workspace-plan-alert flex flex-col justify-between gap-3 rounded-2xl border p-4 text-sm font-semibold sm:flex-row sm:items-center ${planExpired ? 'border-rose-300 bg-rose-50 text-rose-900' : 'border-amber-300 bg-amber-50 text-amber-900'}`}><span>{planExpired ? 'مدت پلن شما به پایان رسیده است. برای تمدید با مدیریت نوبتک ارتباط بگیرید؛ تنظیمات پلن سفارشی شما محفوظ است.' : planDaysRemaining === 0 ? 'پلن شما امروز به پایان می‌رسد. برای تمدید با مدیریت نوبتک ارتباط بگیرید.' : `پلن شما تا ${planDaysRemaining.toLocaleString('fa-AF')} روز دیگر به پایان می‌رسد. برای تمدید با مدیریت نوبتک ارتباط بگیرید.`}</span><Link href="/contact" className="shrink-0 rounded-xl border border-current px-4 py-2 text-center text-xs font-bold">تمدید اشتراک</Link></div></div>}
 
-      <div className="max-w-7xl mx-auto px-4 pt-4 text-xs text-slate-600" role="status">
-        کسب‌وکارهای شما: {businesses.length} / {businessLimit === null ? 'نامحدود' : businessLimit}
-        {!canCreateBusiness && <span className="mr-2 text-amber-700">برای ایجاد کسب‌وکار جدید، از مدیر بخواهید سقف شما را افزایش دهد.</span>}
-      </div>
-      <section className="workspace-intro"><div><span>مدیریت کسب‌وکار / نوبتک</span><h1>روز کاری‌تان، در یک نگاه.</h1><p>نوبت‌ها، همکاران و روزهای پذیرش را از همین‌جا مدیریت کنید.</p></div><div className="workspace-date">{isoToAfghaniDate(selectedDate)}<small>روز انتخاب‌شده</small></div></section>
-      {dataError && <div role="alert" className="mx-auto w-full max-w-7xl px-4 pt-4"><div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">{dataError}<button type="button" className="mr-3 font-bold underline" onClick={() => { if (selectedBusiness) void loadBusinessDetails(selectedBusiness.id, selectedDate); }}>تلاش دوباره</button></div></div>}
+      {dataError && <div role="alert" className="mx-auto w-full max-w-7xl px-4 pt-4 sm:px-6 lg:px-8"><div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">{dataError}<button type="button" className="mr-3 font-bold underline" onClick={() => { if (selectedBusiness) void loadBusinessDetails(selectedBusiness.id, selectedDate); }}>تلاش دوباره</button></div></div>}
       {/* Global Notification Toast */}
       {alertMsg && (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
@@ -833,7 +795,7 @@ export default function DashboardPage() {
           <>
             {/* Active Business Banner */}
             {selectedBusiness && (
-              <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="hidden">
                 <div className="flex items-center gap-4">
                   <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center text-2xl font-extrabold shadow-md shadow-blue-500/20 shrink-0">
                     {selectedBusiness.logo_url || selectedBusiness.name.charAt(0)}
@@ -871,16 +833,16 @@ export default function DashboardPage() {
             )}
 
             {/* Tab Navigation */}
-            <div className="flex items-center gap-2 border-b border-slate-200 overflow-x-auto pb-1">
+            <div className="workspace-toolbar flex items-center gap-2 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-3 shadow-xs">
               <button
                 onClick={() => setActiveTab('queue')}
                 className={`px-4 py-2.5 rounded-xl font-bold text-xs transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
                   activeTab === 'queue'
-                    ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/20'
+                    ? 'workspace-toolbar-active bg-blue-600 text-white shadow-sm shadow-blue-500/20'
                     : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
                 }`}
               >
-                <span>⚡ مدیریت صف و نوبت‌ها</span>
+                <ListOrdered size={17} aria-hidden="true" /><span>صف و نوبت‌ها</span>
                 <span className="bg-white/20 text-white px-1.5 py-0.5 rounded-md text-[10px]">
                   {detailsReady ? waitingAppointments.length : '—'}
                 </span>
@@ -890,45 +852,49 @@ export default function DashboardPage() {
                 onClick={() => setActiveTab('services')}
                 className={`px-4 py-2.5 rounded-xl font-bold text-xs transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
                   activeTab === 'services'
-                    ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/20'
+                    ? 'workspace-toolbar-active bg-blue-600 text-white shadow-sm shadow-blue-500/20'
                     : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
                 }`}
               >
-                <span>🏷️ خدمات ({detailsReady ? services.length : '—'})</span>
+                <Scissors size={17} aria-hidden="true" /><span>خدمات ({detailsReady ? services.length : '—'})</span>
               </button>
 
               <button
                 onClick={() => setActiveTab('staff')}
                 className={`px-4 py-2.5 rounded-xl font-bold text-xs transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
                   activeTab === 'staff'
-                    ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/20'
+                    ? 'workspace-toolbar-active bg-blue-600 text-white shadow-sm shadow-blue-500/20'
                     : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
                 }`}
               >
-                <span>👥 کارکنان ({detailsReady ? staffMembers.length : '—'})</span>
+                <Users size={17} aria-hidden="true" /><span>کارکنان ({detailsReady ? staffMembers.length : '—'})</span>
               </button>
+
+              {hasAdvancedScheduling && <button onClick={() => { setActiveTab('queue'); window.setTimeout(() => document.getElementById('holiday-settings')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 0); }} className="flex cursor-pointer items-center gap-2 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-100"><CalendarDays size={17} aria-hidden="true" />تنظیم رخصتی</button>}
 
               <button
                 onClick={() => setActiveTab('settings')}
                 className={`px-4 py-2.5 rounded-xl font-bold text-xs transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
                   activeTab === 'settings'
-                    ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/20'
+                    ? 'workspace-toolbar-active bg-blue-600 text-white shadow-sm shadow-blue-500/20'
                     : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
                 }`}
               >
-                <span>⚙️ تنظیمات کسب‌وکار</span>
+                <Settings size={17} aria-hidden="true" /><span>تنظیمات کسب‌وکار</span>
               </button>
+
+              {selectedBusiness && <button type="button" onClick={() => { const url = `${window.location.origin}/q/${selectedBusiness.slug}`; navigator.clipboard.writeText(url).then(() => setAlertMsg({ type: 'success', text: 'لینک نوبت‌گیری کپی شد.' })).catch(() => setAlertMsg({ type: 'error', text: 'کپی لینک انجام نشد؛ دوباره تلاش کنید.' })); }} className="mr-auto flex cursor-pointer items-center gap-2 whitespace-nowrap rounded-xl border border-blue-600 bg-white px-4 py-2.5 text-xs font-bold text-blue-700 hover:bg-blue-50"><Copy size={17} aria-hidden="true" />کپی لینک اشتراک</button>}
             </div>
 
             {/* TAB 1: Queue & Appointments */}
             {detailsReady && activeTab === 'queue' && (
               <div className="space-y-6">
                 {/* DATE SELECTOR BAR FOR OWNER QUEUE */}
-                <div className="bg-white rounded-2xl border border-slate-200 p-3.5 shadow-xs space-y-2">
+                <div className="workspace-queue-filters rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
                   <div className="flex items-center justify-between text-xs font-bold text-slate-800 px-1">
                     <span className="flex items-center gap-1.5">
                       <span>📅</span>
-                      <span>انتخاب تاریخ صف نوبت‌دهی (مدیریت):</span>
+                      <span>تاریخ و فیلتر صف</span>
                     </span>
                     <div className="flex items-center gap-2">
                       {isAutoRefreshing ? (
@@ -969,12 +935,16 @@ export default function DashboardPage() {
                       <AfghanDatePicker min={todayStr} value={selectedDate} onChange={handleDateChange} />
                     </div>
                   </div>
+                  <div className="grid gap-3 border-t border-slate-100 pt-3 sm:grid-cols-2">
+                    <label className="flex items-center gap-2 text-xs font-bold text-slate-700"><span className="shrink-0">خدمت:</span><select value={queueServiceFilter} onChange={event => setQueueServiceFilter(event.target.value)} className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold"><option value="all">همهٔ خدمات</option>{services.map(service => <option key={service.id} value={service.id}>{service.name}</option>)}</select></label>
+                    <label className="flex items-center gap-2 text-xs font-bold text-slate-700"><span className="shrink-0">کارمند:</span><select value={hiddenStaffIds.length === 0 ? 'all' : ([...staffMembers.map(person => person.id), 'unassigned'].find(id => !hiddenStaffIds.includes(id)) || 'all')} onChange={event => { const value = event.target.value; const ids = [...staffMembers.map(person => person.id), 'unassigned']; setHiddenStaffIds(value === 'all' ? [] : ids.filter(id => id !== value)); }} className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold"><option value="all">همهٔ کارکنان</option>{staffMembers.map(person => <option key={person.id} value={person.id}>{person.name}</option>)}<option value="unassigned">بدون انتخاب کارمند</option></select></label>
+                  </div>
                 </div>
 
-                {hasAdvancedScheduling && selectedBusiness && <DailyBookingControl key={selectedBusiness.id + selectedDate} businessId={selectedBusiness.id} date={selectedDate} onChanged={() => {
+                {hasAdvancedScheduling && selectedBusiness && <div id="holiday-settings"><DailyBookingControl key={selectedBusiness.id + selectedDate} businessId={selectedBusiness.id} date={selectedDate} onChanged={() => {
                   queueRevision.current++; invalidateAppointmentReads();
                   void loadAppointmentsOnly(selectedBusiness.id, selectedDateRef.current);
-                }} />}
+                }} /></div>}
                 {pending.size > 0 && <p role="status" className="text-sm text-blue-700">در حال ثبت تغییرات…</p>}
                 {/* Capacity Status Banner */}
 
@@ -997,7 +967,7 @@ export default function DashboardPage() {
                           : 'text-slate-600 hover:bg-slate-100'
                       }`}
                     >
-                      همه ({appointments.length})
+                      {scopedAppointments.length.toLocaleString('fa-AF')} نفر همه
                     </button>
 
                     <button
@@ -1008,7 +978,7 @@ export default function DashboardPage() {
                           : 'text-slate-600 hover:bg-slate-100'
                       }`}
                     >
-                      در انتظار ({waitingAppointments.length})
+                      {waitingAppointments.length.toLocaleString('fa-AF')} نفر در انتظار
                     </button>
 
                     <button
@@ -1019,7 +989,7 @@ export default function DashboardPage() {
                           : 'text-slate-600 hover:bg-slate-100'
                       }`}
                     >
-                      در حال خدمت ({currentServingApp ? 1 : 0})
+                      {scopedAppointments.filter(appointment => appointment.status === 'serving').length.toLocaleString('fa-AF')} نفر در حال خدمت
                     </button>
 
                     <button
@@ -1030,7 +1000,7 @@ export default function DashboardPage() {
                           : 'text-slate-600 hover:bg-slate-100'
                       }`}
                     >
-                      تکمیل‌شده ({completedAppointments.length})
+                      {completedAppointments.length.toLocaleString('fa-AF')} نفر تکمیل‌شده
                     </button>
                   </div>
 
@@ -1042,11 +1012,11 @@ export default function DashboardPage() {
                     }}
                     className="text-xs shrink-0 font-bold"
                   >
-                    + ثبت نوبت جدید / حضوری ({isoToAfghaniDate(selectedDate)})
+                    <Plus size={17} aria-hidden="true" /> ثبت نوبت جدید
                   </Button>
                 </div>
 
-                <fieldset className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+                <fieldset className="hidden">
                   <legend className="px-2 text-sm font-bold text-slate-800">نمایش نوبت‌های کارمندان / داکترها</legend>
                   <div className="flex flex-wrap gap-x-6 gap-y-3">
                     <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-700">
