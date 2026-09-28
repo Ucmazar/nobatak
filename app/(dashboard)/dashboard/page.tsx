@@ -62,7 +62,7 @@ export default function DashboardPage() {
 
   const [selectedDate, setSelectedDate] = useState<string>(todayStr);
 
-  const [user, setUser] = useState<{id:string;email?:string;user_metadata?:{full_name?:string}} | null>(bootstrap?.user || null);
+  const [user, setUser] = useState<{ id: string; email?: string; user_metadata?: { full_name?: string } } | null>(bootstrap?.user || null);
   const [profile, setProfile] = useState<Profile | null>(bootstrap?.profile || null);
   const [loading, setLoading] = useState(true);
   const [detailsReady, setDetailsReady] = useState(false);
@@ -269,7 +269,7 @@ export default function DashboardPage() {
     }
 
     initDashboard();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]); // selectedDate intentionally excluded — date changes handled by handleDateChange
 
   // Realtime first; low-frequency reconciliation covers missing publication/reconnects.
@@ -646,7 +646,7 @@ export default function DashboardPage() {
       queueRevision.current++;
       invalidateAppointmentReads();
       if (!success && selectedBusinessRef.current?.id === original.business_id && selectedDateRef.current === original.appointment_date) {
-        setAppointments(previous => [...previous.filter(row => row.id !== id), original].sort((a,b) => a.queue_number - b.queue_number));
+        setAppointments(previous => [...previous.filter(row => row.id !== id), original].sort((a, b) => a.queue_number - b.queue_number));
       }
       void loadAppointmentsOnly(original.business_id, original.appointment_date);
     }
@@ -785,11 +785,10 @@ export default function DashboardPage() {
       {alertMsg && (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
           <div
-            className={`p-4 rounded-xl border text-xs font-semibold flex items-center justify-between transition-all ${
-              alertMsg.type === 'error'
+            className={`p-4 rounded-xl border text-xs font-semibold flex items-center justify-between transition-all ${alertMsg.type === 'error'
                 ? 'bg-rose-50 border-rose-200 text-rose-800'
                 : 'bg-emerald-50 border-emerald-200 text-emerald-800'
-            }`}
+              }`}
           >
             <span>{alertMsg.text}</span>
             <button onClick={() => setAlertMsg(null)} className="text-sm font-bold opacity-60 hover:opacity-100">
@@ -865,11 +864,10 @@ export default function DashboardPage() {
             <div className="workspace-toolbar flex items-center gap-2 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-3 shadow-xs">
               <button
                 onClick={() => { setHolidayPanelOpen(false); setActiveTab('queue'); }}
-                className={`px-4 py-2.5 rounded-xl font-bold text-xs transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
-                  activeTab === 'queue'
+                className={`px-4 py-2.5 rounded-xl font-bold text-xs transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${activeTab === 'queue'
                     ? 'workspace-toolbar-active bg-blue-600 text-white shadow-sm shadow-blue-500/20'
                     : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-                }`}
+                  }`}
               >
                 <ListOrdered size={17} aria-hidden="true" /><span>صف و نوبت‌ها</span>
                 <span className="workspace-toolbar-count px-1.5 py-0.5 rounded-md text-[10px]">
@@ -879,22 +877,20 @@ export default function DashboardPage() {
 
               <button
                 onClick={() => { setHolidayPanelOpen(false); setActiveTab('services'); }}
-                className={`px-4 py-2.5 rounded-xl font-bold text-xs transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
-                  activeTab === 'services'
+                className={`px-4 py-2.5 rounded-xl font-bold text-xs transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${activeTab === 'services'
                     ? 'workspace-toolbar-active bg-blue-600 text-white shadow-sm shadow-blue-500/20'
                     : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-                }`}
+                  }`}
               >
                 <Scissors size={17} aria-hidden="true" /><span>خدمات ({detailsReady ? services.length : '—'})</span>
               </button>
 
               <button
                 onClick={() => { setHolidayPanelOpen(false); setActiveTab('staff'); }}
-                className={`px-4 py-2.5 rounded-xl font-bold text-xs transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
-                  activeTab === 'staff'
+                className={`px-4 py-2.5 rounded-xl font-bold text-xs transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${activeTab === 'staff'
                     ? 'workspace-toolbar-active bg-blue-600 text-white shadow-sm shadow-blue-500/20'
                     : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-                }`}
+                  }`}
               >
                 <Users size={17} aria-hidden="true" /><span>کارکنان ({detailsReady ? staffMembers.length : '—'})</span>
               </button>
@@ -903,11 +899,10 @@ export default function DashboardPage() {
 
               <button
                 onClick={() => { setHolidayPanelOpen(false); setActiveTab('settings'); }}
-                className={`px-4 py-2.5 rounded-xl font-bold text-xs transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
-                  activeTab === 'settings'
+                className={`px-4 py-2.5 rounded-xl font-bold text-xs transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${activeTab === 'settings'
                     ? 'workspace-toolbar-active bg-blue-600 text-white shadow-sm shadow-blue-500/20'
                     : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-                }`}
+                  }`}
               >
                 <Settings size={17} aria-hidden="true" /><span>تنظیمات کسب‌وکار</span>
               </button>
@@ -985,44 +980,40 @@ export default function DashboardPage() {
                   <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
                     <button
                       onClick={() => setAppointmentFilter('all')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                        appointmentFilter === 'all'
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${appointmentFilter === 'all'
                           ? 'bg-slate-900 text-white'
                           : 'text-slate-600 hover:bg-slate-100'
-                      }`}
+                        }`}
                     >
                       {scopedAppointments.length.toLocaleString('fa-AF')} نفر همه
                     </button>
 
                     <button
                       onClick={() => setAppointmentFilter('waiting')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                        appointmentFilter === 'waiting'
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${appointmentFilter === 'waiting'
                           ? 'bg-amber-500 text-white'
                           : 'text-slate-600 hover:bg-slate-100'
-                      }`}
+                        }`}
                     >
                       {waitingAppointments.length.toLocaleString('fa-AF')} نفر در انتظار
                     </button>
 
                     <button
                       onClick={() => setAppointmentFilter('serving')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                        appointmentFilter === 'serving'
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${appointmentFilter === 'serving'
                           ? 'bg-blue-600 text-white'
                           : 'text-slate-600 hover:bg-slate-100'
-                      }`}
+                        }`}
                     >
                       {scopedAppointments.filter(appointment => appointment.status === 'serving').length.toLocaleString('fa-AF')} نفر در حال خدمت
                     </button>
 
                     <button
                       onClick={() => setAppointmentFilter('completed')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                        appointmentFilter === 'completed'
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${appointmentFilter === 'completed'
                           ? 'bg-emerald-600 text-white'
                           : 'text-slate-600 hover:bg-slate-100'
-                      }`}
+                        }`}
                     >
                       {completedAppointments.length.toLocaleString('fa-AF')} نفر تکمیل‌شده
                     </button>
@@ -1041,7 +1032,7 @@ export default function DashboardPage() {
                 </div>
 
                 <fieldset className="hidden">
-                  <legend className="px-2 text-sm font-bold text-slate-800">نمایش نوبت‌های کارمندان / داکترها</legend>
+                  <legend className="px-2 text-sm font-bold text-slate-800">نمایش نوبت‌های کارمندان</legend>
                   <div className="flex flex-wrap gap-x-6 gap-y-3">
                     <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-700">
                       <input type="checkbox" className="h-4 w-4 accent-blue-600" checked={hiddenStaffIds.length === 0}
@@ -1241,61 +1232,61 @@ export default function DashboardPage() {
                   <DeviceBookingLimitSetting key={selectedBusiness.id} business={selectedBusiness} onSaved={updated => { selectedBusinessRef.current = updated; setSelectedBusiness(updated); setBusinesses(previous => previous.map(item => item.id === updated.id ? updated : item)); }} />
                   <div className="mt-6" />
                   <form onSubmit={handleUpdateBusinessSettings} className="space-y-4">
-          <fieldset disabled={isPending('business-form')} aria-busy={isPending('business-form')} className="space-y-4 min-w-0">
-                    <Input
-                      label="نام کسب‌وکار *"
-                      value={selectedBusiness.name}
-                      onChange={(e) => setSelectedBusiness({ ...selectedBusiness, name: e.target.value })}
-                      required
-                    />
-
-                    <div className="space-y-1.5">
-                      <label className="block text-xs font-semibold text-slate-700">توضیحات</label>
-                      <textarea
-                        rows={3}
-                        value={selectedBusiness.description || ''}
-                        onChange={(e) => setSelectedBusiness({ ...selectedBusiness, description: e.target.value })}
-                        placeholder="شرح کوتاه کسب‌وکار..."
-                        className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-600 focus:outline-none"
+                    <fieldset disabled={isPending('business-form')} aria-busy={isPending('business-form')} className="space-y-4 min-w-0">
+                      <Input
+                        label="نام کسب‌وکار *"
+                        value={selectedBusiness.name}
+                        onChange={(e) => setSelectedBusiness({ ...selectedBusiness, name: e.target.value })}
+                        required
                       />
-                    </div>
 
-                    <Input
-                      label="شماره تماس"
-                      value={selectedBusiness.phone || ''}
-                      onChange={(e) => setSelectedBusiness({ ...selectedBusiness, phone: e.target.value })}
-                      className="dir-ltr text-right"
-                    />
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-semibold text-slate-700">توضیحات</label>
+                        <textarea
+                          rows={3}
+                          value={selectedBusiness.description || ''}
+                          onChange={(e) => setSelectedBusiness({ ...selectedBusiness, description: e.target.value })}
+                          placeholder="شرح کوتاه کسب‌وکار..."
+                          className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-600 focus:outline-none"
+                        />
+                      </div>
 
-                    <Input
-                      label="آدرس حضوری"
-                      value={selectedBusiness.address || ''}
-                      onChange={(e) => setSelectedBusiness({ ...selectedBusiness, address: e.target.value })}
-                    />
+                      <Input
+                        label="شماره تماس"
+                        value={selectedBusiness.phone || ''}
+                        onChange={(e) => setSelectedBusiness({ ...selectedBusiness, phone: e.target.value })}
+                        className="dir-ltr text-right"
+                      />
+
+                      <Input
+                        label="آدرس حضوری"
+                        value={selectedBusiness.address || ''}
+                        onChange={(e) => setSelectedBusiness({ ...selectedBusiness, address: e.target.value })}
+                      />
 
 
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <Input type="time" label="ساعت شروع کار" value={selectedBusiness.opening_time?.slice(0,5) || ''} onChange={e => setSelectedBusiness({ ...selectedBusiness, opening_time: e.target.value || null })} />
-                      <Input type="time" label="ساعت ختم کار" value={selectedBusiness.closing_time?.slice(0,5) || ''} onChange={e => setSelectedBusiness({ ...selectedBusiness, closing_time: e.target.value || null })} />
-                    </div>
-                    <p className="text-xs text-slate-500">ساعت‌ها به وقت افغانستان در صفحهٔ نوبت‌گیری نمایش داده می‌شوند. ختم زودتر از شروع، به معنی ختم در روز بعد است.</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <Input type="time" label="ساعت شروع کار" value={selectedBusiness.opening_time?.slice(0, 5) || ''} onChange={e => setSelectedBusiness({ ...selectedBusiness, opening_time: e.target.value || null })} />
+                        <Input type="time" label="ساعت ختم کار" value={selectedBusiness.closing_time?.slice(0, 5) || ''} onChange={e => setSelectedBusiness({ ...selectedBusiness, closing_time: e.target.value || null })} />
+                      </div>
+                      <p className="text-xs text-slate-500">ساعت‌ها به وقت افغانستان در صفحهٔ نوبت‌گیری نمایش داده می‌شوند. ختم زودتر از شروع، به معنی ختم در روز بعد است.</p>
 
-                    <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
-                      <button
-                        type="button"
-                        disabled={isPending('business-form')} aria-busy={isPending('business-form')} onClick={handleDeleteBusiness}
-                        className="text-xs font-bold text-rose-600 hover:bg-rose-50 px-3 py-2 rounded-lg transition-colors"
-                      >
-                        🗑️ حذف کامل این کسب‌وکار
-                      </button>
+                      <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
+                        <button
+                          type="button"
+                          disabled={isPending('business-form')} aria-busy={isPending('business-form')} onClick={handleDeleteBusiness}
+                          className="text-xs font-bold text-rose-600 hover:bg-rose-50 px-3 py-2 rounded-lg transition-colors"
+                        >
+                          🗑️ حذف کامل این کسب‌وکار
+                        </button>
 
-                      <Button type="submit" isLoading={bizSaving || isPending('business-form')}>
-                        ذخیره تغییرات
-                      </Button>
-                    </div>
-                  </fieldset>
-        </form>
+                        <Button type="submit" isLoading={bizSaving || isPending('business-form')}>
+                          ذخیره تغییرات
+                        </Button>
+                      </div>
+                    </fieldset>
+                  </form>
                 </CardContent>
               </Card>
             )}
@@ -1322,52 +1313,52 @@ export default function DashboardPage() {
 
         <form onSubmit={handleCreateBusiness} className="space-y-4">
           <fieldset disabled={isPending('business-form')} aria-busy={isPending('business-form')} className="space-y-4 min-w-0">
-          <Input
-            label="نام کسب‌وکار *"
-            placeholder="مثلاً: آرایشگاه VIP، کلینیک شفا"
-            value={bizName}
-            onChange={(e) => {
-              const val = e.target.value;
-              setBizName(val);
-              if (!bizSlug || bizSlug === slugify(bizName)) {
-                setBizSlug(slugify(val));
-              }
-            }}
-            required
-          />
-
-          <div className="space-y-1.5">
             <Input
-              label="آدرس اختصاصی لینک (Slug)"
-              placeholder="مثلاً: fahim-barber"
-              value={bizSlug}
-              onChange={(e) => setBizSlug(e.target.value)}
-              onBlur={() => {
-                if (bizSlug.trim()) {
-                  setBizSlug(slugify(bizSlug));
+              label="نام کسب‌وکار *"
+              placeholder="مثلاً: آرایشگاه VIP، کلینیک شفا"
+              value={bizName}
+              onChange={(e) => {
+                const val = e.target.value;
+                setBizName(val);
+                if (!bizSlug || bizSlug === slugify(bizName)) {
+                  setBizSlug(slugify(val));
                 }
               }}
-              helperText="اگر خالی بگذارید، به طور خودکار از نام کسب‌وکار ساخته می‌شود."
-              className="dir-ltr text-left font-mono"
+              required
             />
-          </div>
 
-          <Input
-            label="شماره تماس (اختیاری)"
-            value={bizPhone}
-            onChange={(e) => setBizPhone(e.target.value)}
-            className="dir-ltr text-right"
-          />
+            <div className="space-y-1.5">
+              <Input
+                label="آدرس اختصاصی لینک (Slug)"
+                placeholder="مثلاً: fahim-barber"
+                value={bizSlug}
+                onChange={(e) => setBizSlug(e.target.value)}
+                onBlur={() => {
+                  if (bizSlug.trim()) {
+                    setBizSlug(slugify(bizSlug));
+                  }
+                }}
+                helperText="اگر خالی بگذارید، به طور خودکار از نام کسب‌وکار ساخته می‌شود."
+                className="dir-ltr text-left font-mono"
+              />
+            </div>
 
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
-            <Button type="button" variant="outline" onClick={() => setIsBizModalOpen(false)}>
-              انصراف
-            </Button>
-            <Button type="submit" isLoading={bizSaving || isPending('business-form')}>
-              ذخیره و ایجاد
-            </Button>
-          </div>
-        </fieldset>
+            <Input
+              label="شماره تماس (اختیاری)"
+              value={bizPhone}
+              onChange={(e) => setBizPhone(e.target.value)}
+              className="dir-ltr text-right"
+            />
+
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+              <Button type="button" variant="outline" onClick={() => setIsBizModalOpen(false)}>
+                انصراف
+              </Button>
+              <Button type="submit" isLoading={bizSaving || isPending('business-form')}>
+                ذخیره و ایجاد
+              </Button>
+            </div>
+          </fieldset>
         </form>
       </Modal>
 
@@ -1380,43 +1371,43 @@ export default function DashboardPage() {
       >
         <form onSubmit={handleSaveService} className="space-y-4">
           <fieldset disabled={isPending(editingService ? 'service:' + editingService.id : 'service-new')} aria-busy={isPending(editingService ? 'service:' + editingService.id : 'service-new')} className="space-y-4 min-w-0">
-          <Input
-            label="عنوان خدمت *"
-            placeholder="مثلاً: اصلاح مو، فیشیال صورت"
-            value={serviceName}
-            onChange={(e) => setServiceName(e.target.value)}
-            required
-          />
-
-          <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-slate-700">توضیحات مختصر</label>
-            <textarea
-              rows={2}
-              value={serviceDescription}
-              onChange={(e) => setServiceDescription(e.target.value)}
-              placeholder="شرح کوتاه خدمت..."
-              className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-600 focus:outline-none"
+            <Input
+              label="عنوان خدمت *"
+              placeholder="مثلاً: اصلاح مو، فیشیال صورت"
+              value={serviceName}
+              onChange={(e) => setServiceName(e.target.value)}
+              required
             />
-          </div>
 
-          <Input
-            label="مدت زمان تقریبی (دقیقه) *"
-            type="number"
-            value={serviceDuration}
-            onChange={(e) => setServiceDuration(e.target.value)}
-            required
-            className="dir-ltr text-right"
-          />
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-slate-700">توضیحات مختصر</label>
+              <textarea
+                rows={2}
+                value={serviceDescription}
+                onChange={(e) => setServiceDescription(e.target.value)}
+                placeholder="شرح کوتاه خدمت..."
+                className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-600 focus:outline-none"
+              />
+            </div>
 
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
-            <Button type="button" variant="outline" onClick={() => setIsServiceModalOpen(false)}>
-              انصراف
-            </Button>
-            <Button type="submit" isLoading={serviceSaving}>
-              {editingService ? 'ذخیره تغییرات' : 'افزودن خدمت'}
-            </Button>
-          </div>
-        </fieldset>
+            <Input
+              label="مدت زمان تقریبی (دقیقه) *"
+              type="number"
+              value={serviceDuration}
+              onChange={(e) => setServiceDuration(e.target.value)}
+              required
+              className="dir-ltr text-right"
+            />
+
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+              <Button type="button" variant="outline" onClick={() => setIsServiceModalOpen(false)}>
+                انصراف
+              </Button>
+              <Button type="submit" isLoading={serviceSaving}>
+                {editingService ? 'ذخیره تغییرات' : 'افزودن خدمت'}
+              </Button>
+            </div>
+          </fieldset>
         </form>
       </Modal>
 
@@ -1430,23 +1421,23 @@ export default function DashboardPage() {
         <form onSubmit={handleSaveStaff} className="space-y-4">
           <fieldset disabled={isPending(editingStaff ? 'staff:' + editingStaff.id : 'staff-new')} aria-busy={isPending(editingStaff ? 'staff:' + editingStaff.id : 'staff-new')} className="space-y-4 min-w-0">
             {hasAdvancedScheduling && <Input type="number" min="0" max="2147483647" step="1" label="ظرفیت روزانهٔ این کارمند" value={staffCapacity} onChange={e => setStaffCapacity(e.target.value)} helperText="صفر یعنی نامحدود. ظرفیت هر کارمند جدا محاسبه می‌شود." required />}
-          <Input
-            label="نام و نام خانوادگی ارائه‌دهنده *"
-            placeholder="مثلاً: علی رضایی"
-            value={staffName}
-            onChange={(e) => setStaffName(e.target.value)}
-            required
-          />
+            <Input
+              label="نام و نام خانوادگی ارائه‌دهنده *"
+              placeholder="مثلاً: علی رضایی"
+              value={staffName}
+              onChange={(e) => setStaffName(e.target.value)}
+              required
+            />
 
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
-            <Button type="button" variant="outline" onClick={() => setIsStaffModalOpen(false)}>
-              انصراف
-            </Button>
-            <Button type="submit" isLoading={staffSaving}>
-              ثبت ارائه‌دهنده
-            </Button>
-          </div>
-        </fieldset>
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+              <Button type="button" variant="outline" onClick={() => setIsStaffModalOpen(false)}>
+                انصراف
+              </Button>
+              <Button type="submit" isLoading={staffSaving}>
+                ثبت ارائه‌دهنده
+              </Button>
+            </div>
+          </fieldset>
         </form>
       </Modal>
 
@@ -1474,63 +1465,63 @@ export default function DashboardPage() {
         )}
         <form onSubmit={handleAddAppointment} className="space-y-4">
           <fieldset disabled={isPending('appointment-new')} aria-busy={isPending('appointment-new')} className="space-y-4 min-w-0">
-          <Input
-            label="نام مشتری *"
-            placeholder="مثلاً: محمد حسینی"
-            value={custName}
-            onChange={(e) => setCustName(e.target.value)}
-            required
-          />
+            <Input
+              label="نام مشتری *"
+              placeholder="مثلاً: محمد حسینی"
+              value={custName}
+              onChange={(e) => setCustName(e.target.value)}
+              required
+            />
 
-          <Input
-            label="شماره تماس مشتری (اختیاری)"
-            placeholder="۰۹۱۲..."
-            value={custPhone}
-            onChange={(e) => setCustPhone(e.target.value)}
-            className="dir-ltr text-right"
-          />
+            <Input
+              label="شماره تماس مشتری (اختیاری)"
+              placeholder="۰۹۱۲..."
+              value={custPhone}
+              onChange={(e) => setCustPhone(e.target.value)}
+              className="dir-ltr text-right"
+            />
 
-          {services.length > 0 && (
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-slate-700">انتخاب خدمت</label>
-              <select
-                value={selectedServiceId}
-                onChange={(e) => setSelectedServiceId(e.target.value)}
-                className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-600 focus:outline-none"
-              >
-                {services.map(s => (
-                  <option key={s.id} value={s.id}>
-                    {s.name} ({s.duration_minutes} دقیقه)
-                  </option>
-                ))}
-              </select>
+            {services.length > 0 && (
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-slate-700">انتخاب خدمت</label>
+                <select
+                  value={selectedServiceId}
+                  onChange={(e) => setSelectedServiceId(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-600 focus:outline-none"
+                >
+                  {services.map(s => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.duration_minutes} دقیقه)
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {staffMembers.length > 0 && (
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-slate-700">ارائه‌دهنده خدمت (اختیاری)</label>
+                <select
+                  value={selectedStaffId}
+                  onChange={(e) => setSelectedStaffId(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-600 focus:outline-none"
+                >
+                  {staffMembers.map(st => (
+                    <option key={st.id} value={st.id}>{st.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+              <Button type="button" variant="outline" onClick={() => setIsAddAppointmentModalOpen(false)}>
+                انصراف
+              </Button>
+              <Button type="submit" isLoading={appointmentSaving}>
+                ثبت نوبت برای {isoToAfghaniDate(selectedDate)}
+              </Button>
             </div>
-          )}
-
-          {staffMembers.length > 0 && (
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-slate-700">ارائه‌دهنده خدمت (اختیاری)</label>
-              <select
-                value={selectedStaffId}
-                onChange={(e) => setSelectedStaffId(e.target.value)}
-                className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-600 focus:outline-none"
-              >
-                {staffMembers.map(st => (
-                  <option key={st.id} value={st.id}>{st.name}</option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
-            <Button type="button" variant="outline" onClick={() => setIsAddAppointmentModalOpen(false)}>
-              انصراف
-            </Button>
-            <Button type="submit" isLoading={appointmentSaving}>
-              ثبت نوبت برای {isoToAfghaniDate(selectedDate)}
-            </Button>
-          </div>
-        </fieldset>
+          </fieldset>
         </form>
       </Modal>
     </div>

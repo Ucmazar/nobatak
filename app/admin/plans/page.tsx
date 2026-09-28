@@ -107,10 +107,10 @@ export default function PlansPage() {
     return () => { disposed = true; };
   }, []);
 
-  return <section dir="rtl" className="space-y-6">
+  return <section dir="rtl" className="space-y-3">
     <div><h1 className="text-2xl font-bold">مدیریت پلن مشتری‌ها</h1><p className="mt-3 leading-8">برای هر صاحب کسب‌وکار پلن آغاز، رشد یا سفارشی را انتخاب و دکمهٔ فعال‌سازی را بزنید. انتخاب «آغاز» پلن رشد را غیرفعال می‌کند.</p></div>
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">{['۱ کسب‌وکار', '۳ خدمت فعال', '۱ کارمند فعال', '۱۰ نوبت روزانه'].map(label => <div key={label} className="rounded-xl border border-slate-300 bg-white p-5 font-bold text-slate-900">{label}</div>)}</div>
-    <p className="leading-8">سقف نوبت برای مجموع هر کسب‌وکار در هر تاریخ است. نوبت لغوشده ظرفیت را آزاد می‌کند؛ نوبت انجام‌شده شمرده می‌شود.</p>
+    {/* <div className="grid grid-cols-2 gap-3 md:grid-cols-4">{['۱ کسب‌وکار', '۳ خدمت فعال', '۱ کارمند فعال', '۱۰ نوبت روزانه'].map(label => <div key={label} className="rounded-xl border border-slate-300 bg-white p-5 font-bold text-slate-900">{label}</div>)}</div> */}
+    {/* <p className="leading-8">سقف نوبت برای مجموع هر کسب‌وکار در هر تاریخ است. نوبت لغوشده ظرفیت را آزاد می‌کند؛ نوبت انجام‌شده شمرده می‌شود.</p> */}
     {message && <p role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-slate-900">{message}</p>}
     {!ready && !message && <p role="status">در حال دریافت حساب‌ها…</p>}
     {ready && <><label className="block">جستجوی نام<input value={search} onChange={event => setSearch(event.target.value)} className="mt-2 block w-full rounded-xl border border-slate-300 bg-white p-3 text-slate-900" /></label><div className="space-y-4">{accounts.filter(account => (account.full_name || '').includes(search.trim())).map(account => <AccountLimits key={account.id} account={account} onSaved={saved => setAccounts(previous => previous.map(item => item.id === saved.id ? saved : item))} />)}</div>{accounts.length === 0 && <p>هنوز حسابی ثبت نشده است.</p>}</>}
