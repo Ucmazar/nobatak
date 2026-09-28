@@ -121,6 +121,32 @@ export default function AdminDashboardPage() {
     });
   }
 
+  async function handleDeleteUser(target: AdminUserItem) {
+    if (target.role === 'superadmin') return;
+    const displayName = target.full_name || target.phone || 'این کاربر';
+    if (!confirm(`آیا از حذف کامل «${displayName}» مطمئن هستید؟ حساب ورود، کسب‌وکارها، خدمات، کارکنان و نوبت‌های مرتبط برای همیشه حذف می‌شوند.`)) return;
+
+    return runAction('delete-user:' + target.id, async () => {
+      try {
+        const response = await fetch(`/api/admin/users/${target.id}`, { method: 'DELETE' });
+        const result = await response.json().catch(() => null) as { error?: string } | null;
+        if (!response.ok) throw new Error(result?.error || 'حذف کاربر انجام نشد.');
+
+        const [statsData, businessList, userList] = await Promise.all([
+          getAdminStats(),
+          getAllBusinesses(),
+          getAllUsers(),
+        ]);
+        setStats(statsData);
+        setBusinesses(businessList);
+        setUsers(userList);
+        alert('کاربر و تمام اطلاعات وابسته با موفقیت حذف شد.');
+      } catch (error) {
+        alert('خطا در حذف کاربر: ' + (error instanceof Error ? error.message : 'دوباره تلاش کنید.'));
+      }
+    });
+  }
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px]">
@@ -385,21 +411,30 @@ export default function AdminDashboardPage() {
                           {usr.role === 'superadmin' ? (
                             <span className="text-xs text-slate-500 font-mono">—</span>
                           ) : (
-                            <button
-                              disabled={isPending('user:'+usr.id)}
-                              onClick={() => handleToggleUser(usr.id, isActive)}
-                              className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition ${
-                                isActive
-                                  ? 'bg-red-950/40 hover:bg-red-900/60 border-red-800 text-red-300'
-                                  : 'bg-emerald-950/40 hover:bg-emerald-900/60 border-emerald-800 text-emerald-300'
-                              } disabled:opacity-50`}
-                            >
-                              {isPending('user:'+usr.id)
-                                ? 'در حال تغییر...'
-                                : isActive
-                                ? 'غیرفعال کردن'
-                                : 'فعال کردن'}
-                            </button>
+                            <div className="flex flex-wrap justify-center gap-2">
+                              <button
+                                disabled={isPending('user:'+usr.id) || isPending('delete-user:'+usr.id)}
+                                onClick={() => handleToggleUser(usr.id, isActive)}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition ${
+                                  isActive
+                                    ? 'bg-red-950/40 hover:bg-red-900/60 border-red-800 text-red-300'
+                                    : 'bg-emerald-950/40 hover:bg-emerald-900/60 border-emerald-800 text-emerald-300'
+                                } disabled:cursor-wait disabled:opacity-50`}
+                              >
+                                {isPending('user:'+usr.id)
+                                  ? 'در حال تغییر...'
+                                  : isActive
+                                  ? 'غیرفعال کردن'
+                                  : 'فعال کردن'}
+                              </button>
+                              <button
+                                disabled={isPending('delete-user:'+usr.id) || isPending('user:'+usr.id)}
+                                onClick={() => handleDeleteUser(usr)}
+                                className="rounded-xl border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-bold text-red-700 transition hover:bg-red-100 disabled:cursor-wait disabled:opacity-50"
+                              >
+                                {isPending('delete-user:'+usr.id) ? 'در حال حذف…' : 'حذف کامل'}
+                              </button>
+                            </div>
                           )}
                         </td>
                       </tr>
