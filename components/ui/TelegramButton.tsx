@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { getTelegramConfig, createTelegramBundle } from '@/lib/telegram/client';
+import { Send } from 'lucide-react';
 export function TelegramButton({ appointmentId, appointmentIds = [appointmentId] }: { appointmentId: string; appointmentIds?: string[] }) {
   const idsKey = [...new Set(appointmentIds)].sort().join(',');
   const [state, setState] = useState({ id: '', link: '', message: 'در حال بررسی امکان اطلاع‌رسانی…' });
@@ -31,10 +32,10 @@ export function TelegramButton({ appointmentId, appointmentIds = [appointmentId]
   }, [appointmentId, idsKey]);
   const link = state.id === idsKey ? state.link : '';
   const message = state.id === idsKey ? state.message : 'در حال بررسی امکان اطلاع‌رسانی…';
-  const style = 'block w-full rounded-xl px-4 py-3 text-center text-sm font-bold';
+  const style = 'flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-center text-sm font-bold';
   return <div className="space-y-2">
-    {link ? <a href={link} target="_blank" rel="noopener noreferrer" className={style + ' bg-sky-500 hover:bg-sky-600 text-white'}>اطلاع‌رسانی با تلگرام</a>
-      : <button type="button" disabled aria-describedby="telegram-availability" className={style + ' bg-sky-100 text-sky-700 cursor-not-allowed'}>اطلاع‌رسانی با تلگرام</button>}
+    {link ? <a href={link} target="_blank" rel="noopener noreferrer" className={style + ' bg-cyan-500 hover:bg-cyan-600 text-white'}><Send size={18} aria-hidden="true" />اطلاع‌رسانی با تلگرام</a>
+      : <button type="button" disabled aria-describedby="telegram-availability" className={style + ' bg-cyan-100 text-cyan-700 cursor-not-allowed'}><Send size={18} aria-hidden="true" />اطلاع‌رسانی با تلگرام</button>}
     {message && <p id="telegram-availability" role="status" className="text-center text-xs leading-5 text-slate-500">{message}</p>}
   </div>;
 }

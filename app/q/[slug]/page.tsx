@@ -24,7 +24,7 @@ import { Badge } from '@/components/ui/Badge';
 import { AfghanDatePicker } from '@/components/ui/AfghanDatePicker';
 import { getUpcomingDaysAfghani, isoToAfghaniDate, getKabulTodayISO } from '@/lib/afghaniMonths';
 import { getBookingDeviceId, normalizeBookingName } from '@/lib/booking-device';
-import { CalendarDays, Clock3, MapPin, Phone, Store, Ticket, Users } from 'lucide-react';
+import { AlertTriangle, CalendarDays, Check, Clock3, Download, MapPin, Phone, Plus, ShieldCheck, Store, Ticket, Users, XCircle } from 'lucide-react';
 
 interface PublicBookingPageProps {
   params: Promise<{ slug: string }>;
@@ -242,15 +242,18 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
   const servingAppointment = dateAppointments.find(a => a.status === 'serving');
   const bookingAhead = queueAhead(dateAppointments, selectedDate, selectedStaffId || null);
   const selectedService = services.find(s => s.id === selectedServiceId) || services[0] || null;
-  const serviceDuration = selectedService ? selectedService.duration_minutes : 20;
-
   const selectedAppointment = myAppointments.find(a => a.id === activeTicketId && a.appointment_date === selectedDate) || myAppointments.find(a => a.appointment_date === selectedDate) || null;
+  const receiptService = selectedAppointment ? services.find(service => service.id === selectedAppointment.service_id) || selectedAppointment.service : null;
+  const serviceDuration = selectedAppointment && !showBookingForm ? receiptService?.duration_minutes ?? 20 : selectedService?.duration_minutes ?? 20;
   const peopleAheadCount = selectedAppointment
     ? queueAhead(dateAppointments, selectedAppointment.appointment_date, selectedAppointment.staff_id, selectedAppointment.queue_number)
     : 0;
   const estimatedWaitTime = selectedAppointment && !showBookingForm
     ? peopleAheadCount * serviceDuration
     : bookingAhead * serviceDuration;
+  const selectedAppointmentTime = selectedAppointment?.created_at
+    ? new Intl.DateTimeFormat('fa-AF', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Kabul' }).format(new Date(selectedAppointment.created_at))
+    : '—';
 
   // ─── LocalStorage helpers ─────────────────────────────────────────────────
   const saveAppointmentToLocalStorage = (bizId: string, newApp: Appointment) => {
@@ -409,7 +412,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
         <div className="mx-auto flex min-h-20 max-w-5xl items-center justify-between gap-4 px-4 py-4">
           <Link href="/" className="flex min-w-0 items-center gap-3">
             <span className="booking-header-icon"><CalendarDays size={24} aria-hidden="true" /></span>
-            <span className="min-w-0"><strong className="block truncate text-lg sm:text-2xl">نوبتک - {business.name}</strong>{business.description && <small className="mt-1 block truncate text-[11px] text-blue-100/80 sm:text-xs">{business.description}</small>}</span>
+            <span className="min-w-0"><strong className="block truncate text-lg sm:text-2xl">نوبتک - در {business.name}</strong>{business.description && <small className="mt-1 block truncate text-[11px] text-blue-100/80 sm:text-xs">{business.description}</small>}</span>
           </Link>
           <div className="flex items-center gap-2">
             {myAppointments.length > 0 && (
@@ -510,8 +513,8 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
 
         {/* SCREEN A: Active Ticket View */}
         {!showBookingForm && selectedAppointment ? (
-          <Card className="border-blue-200 bg-gradient-to-b from-blue-50/40 via-white to-white shadow-xl overflow-hidden">
-            <CardHeader className="text-center pb-4 border-b border-slate-100">
+          <Card className="booking-receipt overflow-hidden border-slate-200 bg-white shadow-xl">
+            <CardHeader className="text-center pb-5">
               {myAppointments.length > 1 && (
                 <div className="mb-4 flex items-center justify-center gap-2 overflow-x-auto pb-1">
                   <span className="text-xs text-slate-500 font-medium ml-1">نوبت‌های شما:</span>
@@ -529,69 +532,70 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
                 </div>
               )}
 
-              <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto text-2xl font-black mb-2 animate-bounce">✓</div>
-              <Badge variant="emerald" className="mx-auto">نوبت شما برای {isoToAfghaniDate(selectedAppointment.appointment_date || selectedDate)} فعال است</Badge>
-              <CardTitle className="text-xl sm:text-2xl mt-2 font-extrabold text-slate-900">رسید آنلاین نوبتک</CardTitle>
-              <CardDescription className="text-xs">
+              <div className="booking-success-mark"><Check size={34} strokeWidth={3} aria-hidden="true" /></div>
+              <Badge variant="emerald" className="mx-auto mt-1">نوبت شما برای {isoToAfghaniDate(selectedAppointment.appointment_date || selectedDate)} فعال است</Badge>
+              <CardTitle className="mt-3 text-2xl font-extrabold text-slate-950 sm:text-3xl">رسید آنلاین نوبتک</CardTitle>
+              <CardDescription className="mt-1 text-sm leading-7">
                 مشتری گرامی <strong className="text-slate-900">{selectedAppointment.customer_name}</strong>، رسید نوبت شما برای <strong className="font-bold text-blue-700">{isoToAfghaniDate(selectedAppointment.appointment_date || selectedDate)}</strong>:
               </CardDescription>
             </CardHeader>
 
-            <CardContent className="space-y-6 pt-6">
-              <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 text-white rounded-3xl p-6 text-center shadow-lg shadow-blue-600/20 space-y-2">
-                <span className="text-xs text-blue-100 font-medium block">شماره نوبت اختصاصی روز {isoToAfghaniDate(selectedAppointment.appointment_date || selectedDate)}</span>
-                <div className="text-6xl font-black font-mono tracking-wider">#{selectedAppointment.queue_number}</div>
-                {selectedAppointment.service && (
-                  <span className="text-xs font-semibold bg-white/15 px-3 py-1 rounded-full inline-block mt-2">
-                    🏷️ {selectedAppointment.service.name}
-                  </span>
-                )}
+            <CardContent className="space-y-5 pt-0">
+              <div className="booking-ticket" aria-label={`شماره نوبت ${selectedAppointment.queue_number}، زمان نوبت ${selectedAppointmentTime}`}>
+                <div className="booking-ticket-value booking-ticket-number"><span>شماره نوبت:</span><strong>{selectedAppointment.queue_number.toLocaleString('fa-AF')}</strong></div>
+                <div aria-hidden="true" />
+                <div className="booking-ticket-value booking-ticket-time"><span>زمان نوبت:</span><strong>{selectedAppointmentTime}</strong></div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3 text-center">
-                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200/80">
+              {(selectedAppointment.service || selectedAppointment.staff) && <div className="flex flex-wrap justify-center gap-2 text-xs font-semibold text-slate-600">{selectedAppointment.service && <span className="rounded-full bg-blue-50 px-3 py-1.5 text-blue-700">خدمت: {selectedAppointment.service.name}</span>}{selectedAppointment.staff && <span className="rounded-full bg-slate-100 px-3 py-1.5">ارائه‌دهنده: {selectedAppointment.staff.name}</span>}</div>}
+
+              <div className="booking-receipt-metrics grid grid-cols-3 gap-3 text-center">
+                <div>
+                  <span className="booking-mini-icon text-blue-600"><Ticket size={20} aria-hidden="true" /></span>
                   <span className="text-[10px] text-slate-500 block">نوبت فعلی سیستم</span>
                   <span className="text-lg font-extrabold text-blue-600 font-mono mt-1 block">
                     {servingAppointment ? `#${servingAppointment.queue_number}` : '—'}
                   </span>
                 </div>
-                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200/80">
+                <div>
+                  <span className="booking-mini-icon text-orange-600"><Users size={20} aria-hidden="true" /></span>
                   <span className="text-[10px] text-slate-500 block">افراد قبل از شما</span>
-                  <span className="text-lg font-extrabold text-amber-600 font-mono mt-1 block">{peopleAheadCount} نفر</span>
+                  <span className="text-lg font-extrabold text-orange-600 font-mono mt-1 block">{peopleAheadCount.toLocaleString('fa-AF')} نفر</span>
                 </div>
-                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200/80">
+                <div>
+                  <span className="booking-mini-icon text-blue-600"><Clock3 size={20} aria-hidden="true" /></span>
                   <span className="text-[10px] text-slate-500 block">زمان تقریبی انتظار</span>
                   <span className="text-sm font-extrabold text-slate-800 font-mono mt-1 block">
-                    {peopleAheadCount === 0 ? 'اولین نوبت روز' : `حدود ${peopleAheadCount * serviceDuration} دقیقه`}
+                    {peopleAheadCount === 0 ? 'اولین نوبت روز' : `حدود ${(peopleAheadCount * serviceDuration).toLocaleString('fa-AF')} دقیقه`}
                   </span>
                 </div>
               </div>
 
-              <div className="bg-amber-50 border border-amber-200/80 rounded-2xl p-4 text-xs text-amber-900 flex items-center gap-3">
-                <span className="text-2xl">📱</span>
+              <div className="booking-browser-note">
+                <ShieldCheck size={24} aria-hidden="true" />
                 <div className="space-y-0.5">
-                  <strong className="block text-amber-950 font-bold">اطلاعات نوبت به‌صورت زنده به‌روز می‌شود</strong>
-                  <p className="text-[11px] text-amber-800">وضعیت نوبت به صورت لحظه‌ای آپدیت می‌شود — بدون نیاز به رفرش صفحه.</p>
+                  <strong className="block font-bold">اطلاعات نوبت در همین مرورگر شما محفوظ می‌ماند</strong>
+                  <p className="text-[11px]">وضعیت نوبت به‌صورت زنده به‌روز می‌شود و به چاپ رسید کاغذی نیاز نیست.</p>
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-xs leading-6 text-rose-900" role="note">
-                <strong className="block text-rose-950">⏰ مهلت حضور</strong>
-                {business?.no_show_grace_minutes === 0 ? 'پس از فرا رسیدن نوبت، باید حاضر باشید؛ در غیر این صورت صاحب کسب‌وکار می‌تواند نوبت را لغو کند.' : `پس از فرا رسیدن نوبت، تا ${(business?.no_show_grace_minutes ?? 5).toLocaleString('fa-AF')} دقیقه حاضر شوید؛ پس از آن صاحب کسب‌وکار می‌تواند نوبت را لغو کند.`}
+              <div className="booking-arrival-note" role="note">
+                <AlertTriangle size={24} aria-hidden="true" />
+                <div><strong className="block">لطفاً به‌موقع حاضر شوید</strong><span>{business?.no_show_grace_minutes === 0 ? 'پس از فرا رسیدن نوبت، باید حاضر باشید؛ در غیر این صورت صاحب کسب‌وکار می‌تواند نوبت را لغو کند.' : `پس از فرا رسیدن نوبت، تا ${(business?.no_show_grace_minutes ?? 5).toLocaleString('fa-AF')} دقیقه حاضر شوید؛ پس از آن صاحب کسب‌وکار می‌تواند نوبت را لغو کند.`}</span></div>
               </div>
 
-              <div className="space-y-3 pt-2">
+              <div className="space-y-3 pt-1">
                 <Button
                   onClick={handleDownloadImage}
                   size="lg"
-                  className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-extrabold text-sm shadow-md shadow-blue-500/20 py-3.5"
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm shadow-md shadow-blue-500/20 py-3.5"
                 >
-                  📸 دانلود رسید به صورت عکس (تصویر)
+                  <Download size={18} aria-hidden="true" /> دانلود رسید به صورت عکس (تصویر)
                 </Button>
                 <TelegramButton key={selectedAppointment.id} appointmentIds={myAppointments.filter(a => a.status === 'waiting' || a.status === 'serving').map(a => a.id)} appointmentId={selectedAppointment.id} />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Button variant="outline" onClick={() => { setFormError(null); setShowBookingForm(true); }} className="text-xs font-bold py-2.5">
-                    + ثبت نوبت جدید (برای روز دیگر یا دیگری)
+                    <Plus size={18} aria-hidden="true" /> ثبت نوبت جدید (برای خود یا فرد دیگر)
                   </Button>
                   <Button
                     variant="outline"
@@ -599,7 +603,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
                     isLoading={cancellingId === selectedAppointment.id} disabled={pending.size > 0}
                     className="text-xs font-bold text-rose-600 border-rose-200 hover:bg-rose-50 py-2.5"
                   >
-                    🗑️ انصراف و حذف این نوبت
+                    <XCircle size={18} aria-hidden="true" /> انصراف از این نوبت
                   </Button>
                 </div>
               </div>
