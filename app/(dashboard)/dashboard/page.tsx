@@ -35,6 +35,23 @@ import { AfghanDatePicker } from '@/components/ui/AfghanDatePicker';
 import { getUpcomingDaysAfghani, isoToAfghaniDate, getKabulTodayISO } from '@/lib/afghaniMonths';
 import { CalendarDays, Copy, ListOrdered, LogOut, Plus, Scissors, Settings, Users } from 'lucide-react';
 
+const SELECTED_BUSINESS_STORAGE_PREFIX = 'nobatak:selected-business:';
+
+function preferredBusiness(items: Business[], userId: string) {
+  let storedId: string | null = null;
+  try { storedId = window.localStorage.getItem(SELECTED_BUSINESS_STORAGE_PREFIX + userId); } catch { /* Storage can be unavailable in strict browser modes. */ }
+  return items.find(item => item.id === storedId) ?? items.find(item => item.is_active !== false) ?? items[0] ?? null;
+}
+
+function rememberBusiness(userId: string | undefined, businessId: string | null) {
+  if (!userId) return;
+  try {
+    const key = SELECTED_BUSINESS_STORAGE_PREFIX + userId;
+    if (businessId) window.localStorage.setItem(key, businessId);
+    else window.localStorage.removeItem(key);
+  } catch { /* Selection persistence is optional when storage is blocked. */ }
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const bootstrap = useDashboardBootstrap();
@@ -47,13 +64,13 @@ export default function DashboardPage() {
 
   const [user, setUser] = useState<{id:string;email?:string;user_metadata?:{full_name?:string}} | null>(bootstrap?.user || null);
   const [profile, setProfile] = useState<Profile | null>(bootstrap?.profile || null);
-  const [loading, setLoading] = useState(!bootstrap);
+  const [loading, setLoading] = useState(true);
   const [detailsReady, setDetailsReady] = useState(false);
   const [dataError, setDataError] = useState<string | null>(null);
 
   // Business State
   const [businesses, setBusinesses] = useState<Business[]>(bootstrap?.businesses || []);
-  const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(() => bootstrap?.businesses.find(b => b.is_active !== false) || bootstrap?.businesses[0] || null);
+  const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
 
   const planDaysRemaining = profile?.plan_code !== 'free' && profile?.plan_expires_on
     ? Math.round((Date.parse(`${profile.plan_expires_on}T00:00:00Z`) - Date.parse(`${todayStr}T00:00:00Z`)) / 86400000)
@@ -191,8 +208,13 @@ export default function DashboardPage() {
       try {
         if (!bootstrap) setLoading(true);
         if (bootstrap) {
-          const firstBiz=bootstrap.businesses.find(b=>b.is_active!==false) || bootstrap.businesses[0];
-          if(firstBiz){setSelectedBusiness(firstBiz);selectedBusinessRef.current=firstBiz;if(firstBiz.is_active!==false)void loadBusinessDetails(firstBiz.id,selectedDateRef.current);}
+          const savedBusiness = preferredBusiness(bootstrap.businesses, bootstrap.user.id);
+          if (savedBusiness) {
+            setSelectedBusiness(savedBusiness);
+            selectedBusinessRef.current = savedBusiness;
+            rememberBusiness(bootstrap.user.id, savedBusiness.id);
+            if (savedBusiness.is_active !== false) void loadBusinessDetails(savedBusiness.id, selectedDateRef.current);
+          }
           return;
         }
         const { data: { user: currentUser }, error: authErr } = await supabase.auth.getUser();
@@ -229,11 +251,14 @@ export default function DashboardPage() {
         setBusinesses(userBizList);
 
         if (userBizList.length > 0) {
-          const firstBiz = userBizList.find(b => b.is_active !== false) ?? userBizList[0];
-          setSelectedBusiness(firstBiz);
-          selectedBusinessRef.current = firstBiz;
+          const savedBusiness = preferredBusiness(userBizList, currentUser.id);
+          setSelectedBusiness(savedBusiness);
+          selectedBusinessRef.current = savedBusiness;
+          rememberBusiness(currentUser.id, savedBusiness?.id ?? null);
           // Use todayStr (stable) — not selectedDate — to avoid stale closure on mount
-          if (firstBiz.is_active !== false) void loadBusinessDetails(firstBiz.id, todayStr);
+          if (savedBusiness?.is_active !== false && savedBusiness) void loadBusinessDetails(savedBusiness.id, todayStr);
+        } else {
+          rememberBusiness(currentUser.id, null);
         }
       } catch (err) {
         console.error('Initialization error:', err);
@@ -279,6 +304,7 @@ export default function DashboardPage() {
     setHolidayPanelOpen(false);
     setSelectedBusiness(biz);
     selectedBusinessRef.current = biz;
+    rememberBusiness(user?.id, biz.id);
     if (biz.is_active !== false) await loadBusinessDetails(biz.id, selectedDateRef.current);
   };
 
@@ -344,6 +370,7 @@ export default function DashboardPage() {
         setBusinesses([newBiz, ...businesses]);
         selectedBusinessRef.current = newBiz;
         setSelectedBusiness(newBiz);
+        rememberBusiness(user.id, newBiz.id);
         await loadBusinessDetails(newBiz.id, selectedDate);
 
         setIsBizModalOpen(false);
@@ -414,10 +441,13 @@ export default function DashboardPage() {
           const remaining = businesses.filter(b => b.id !== selectedBusiness.id);
           setBusinesses(remaining);
           if (remaining.length > 0) {
-            selectedBusinessRef.current = remaining[0];
-            setSelectedBusiness(remaining[0]);
-            loadBusinessDetails(remaining[0].id, selectedDate);
+            const nextBusiness = remaining.find(item => item.is_active !== false) ?? remaining[0];
+            selectedBusinessRef.current = nextBusiness;
+            setSelectedBusiness(nextBusiness);
+            rememberBusiness(user?.id, nextBusiness.id);
+            loadBusinessDetails(nextBusiness.id, selectedDate);
           } else {
+            rememberBusiness(user?.id, null);
             setSelectedBusiness(null);
             setServices([]);
             setStaffMembers([]);
