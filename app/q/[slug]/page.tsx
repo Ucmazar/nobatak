@@ -376,7 +376,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
     const { downloadTicketImage } = await import('@/lib/ticketImage');
     downloadTicketImage({
       appointment: selectedAppointment,
-      business: { name: business.name, description: business.description, phone: business.phone, address: business.address },
+      business: { name: business.name, description: business.description, phone: business.phone, address: business.address, noShowGraceMinutes: business.no_show_grace_minutes },
       serviceName: chosenService?.name || null,
       staffName: chosenStaff?.name || null,
       peopleAhead: aheadCount,

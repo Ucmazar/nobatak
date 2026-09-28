@@ -672,6 +672,7 @@ export default function DashboardPage() {
             description: selectedBusiness.description,
             phone: selectedBusiness.phone,
             address: selectedBusiness.address,
+            noShowGraceMinutes: selectedBusiness.no_show_grace_minutes,
           },
           serviceName: srv?.name || null,
           staffName: st?.name || null,

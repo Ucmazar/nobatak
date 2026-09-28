@@ -1,8 +1,4 @@
 import { isoToAfghaniDate, getKabulTodayISO } from '@/lib/afghaniMonths';
-/**
- * Helper to render and download a high-resolution, visually stunning ticket graphic
- * directly as a PNG image to the user's device gallery/downloads.
- */
 
 interface GenerateTicketParams {
   appointment: {
@@ -18,6 +14,7 @@ interface GenerateTicketParams {
     description?: string | null;
     phone?: string | null;
     address?: string | null;
+    noShowGraceMinutes?: number;
   };
   serviceName?: string | null;
   staffName?: string | null;
@@ -27,179 +24,344 @@ interface GenerateTicketParams {
 
 export function downloadTicketImage(params: GenerateTicketParams) {
   const canvas = document.createElement('canvas');
-  canvas.width = 800;
+  canvas.width = 720;
   canvas.height = 1080;
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
-  // 1. Outer Dark Canvas Background
-  const bgGrad = ctx.createLinearGradient(0, 0, 800, 1080);
-  bgGrad.addColorStop(0, '#0f172a');
-  bgGrad.addColorStop(0.5, '#1e293b');
-  bgGrad.addColorStop(1, '#0f172a');
-  ctx.fillStyle = bgGrad;
-  ctx.fillRect(0, 0, 800, 1080);
+  const logo = new Image();
+  logo.onload = () => renderAndDownload(canvas, ctx, params, logo);
+  logo.onerror = () => renderAndDownload(canvas, ctx, params);
+  logo.src = '/logo-transparent.png';
+}
 
-  // 2. Main Ticket Card Container (Gradient Blue/Indigo)
-  const cardGrad = ctx.createLinearGradient(40, 40, 760, 1040);
-  cardGrad.addColorStop(0, '#1d4ed8'); // blue-700
-  cardGrad.addColorStop(0.5, '#2563eb'); // blue-600
-  cardGrad.addColorStop(1, '#4338ca'); // indigo-700
-  ctx.fillStyle = cardGrad;
-  roundRect(ctx, 40, 40, 720, 1000, 32);
-  ctx.fill();
+function renderAndDownload(
+  canvas: HTMLCanvasElement,
+  ctx: CanvasRenderingContext2D,
+  params: GenerateTicketParams,
+  logo?: HTMLImageElement,
+) {
+  ctx.direction = 'rtl';
+  ctx.textBaseline = 'middle';
 
-  // Decorative circles
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+  ctx.fillStyle = '#f7fbff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#eaf5ff';
   ctx.beginPath();
-  ctx.arc(720, 40, 200, 0, Math.PI * 2);
+  ctx.ellipse(32, 380, 180, 260, -0.35, 0, Math.PI * 2);
   ctx.fill();
+  ctx.fillStyle = '#eef7ff';
   ctx.beginPath();
-  ctx.arc(40, 1040, 180, 0, Math.PI * 2);
+  ctx.ellipse(694, 820, 170, 280, 0.25, 0, Math.PI * 2);
   ctx.fill();
 
-  // 3. Top Branding Section
-  ctx.textAlign = 'right';
-
-  // System Badge
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.18)';
-  roundRect(ctx, 480, 75, 240, 36, 12);
-  ctx.fill();
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 18px Tahoma, Vazirmatn, sans-serif';
-  ctx.fillText('⚡ رسید آنلاین نوبتک', 705, 100);
-
-  // Business Name
-  ctx.font = 'bold 42px Tahoma, Vazirmatn, sans-serif';
-  ctx.fillStyle = '#fde047'; // Bright yellow
-  ctx.fillText(params.business.name || 'کسب‌وکار', 720, 175);
-
-  // Business Contact & Address
-  const addressPhone = [params.business.address, params.business.phone ? `📞 ${params.business.phone}` : '']
-    .filter(Boolean)
-    .join('  •  ');
-  if (addressPhone) {
-    ctx.font = '20px Tahoma, Vazirmatn, sans-serif';
-    ctx.fillStyle = '#e2e8f0';
-    ctx.fillText(addressPhone, 720, 215);
+  if (logo) ctx.drawImage(logo, 526, 25, 154, 87);
+  else {
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#0758c9';
+    ctx.font = font(34, 900);
+    ctx.fillText('نوبتک', 675, 62);
+    ctx.fillStyle = '#53657c';
+    ctx.font = font(13, 500);
+    ctx.fillText('سیستم هوشمند نوبت‌دهی', 675, 91);
   }
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#0758c9';
+  ctx.font = font(31, 900);
+  ctx.fillText(params.business.name || 'کسب‌وکار', 48, 72);
 
-  // Ticket Perforated Cut Line
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
-  ctx.lineWidth = 2;
-  ctx.setLineDash([12, 10]);
-  ctx.beginPath();
-  ctx.moveTo(80, 250);
-  ctx.lineTo(720, 250);
-  ctx.stroke();
-  ctx.setLineDash([]);
-
-  // Cut-out circles on ticket sides
-  ctx.fillStyle = '#0f172a';
-  ctx.beginPath();
-  ctx.arc(40, 250, 20, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(760, 250, 20, 0, Math.PI * 2);
-  ctx.fill();
-
-  // 4. White Ticket Main Body Box
+  ctx.save();
+  ctx.shadowColor = 'rgba(23, 78, 126, 0.11)';
+  ctx.shadowBlur = 24;
+  ctx.shadowOffsetY = 10;
   ctx.fillStyle = '#ffffff';
-  roundRect(ctx, 70, 285, 660, 650, 28);
+  roundRect(ctx, 24, 132, 672, 916, 34);
   ctx.fill();
-
-  // Title inside white box
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#0f172a';
-  ctx.font = 'bold 28px Tahoma, Vazirmatn, sans-serif';
-  const targetDateLabel = params.appointment.appointment_date ? ` (${isoToAfghaniDate(params.appointment.appointment_date)})` : '';
-  ctx.fillText(`تأییدیه و شماره نوبت شما${targetDateLabel}`, 400, 340);
-
-  // Big Queue Number Badge
-  const badgeGrad = ctx.createLinearGradient(200, 370, 600, 520);
-  badgeGrad.addColorStop(0, '#1d4ed8');
-  badgeGrad.addColorStop(1, '#4f46e5');
-  ctx.fillStyle = badgeGrad;
-  roundRect(ctx, 200, 370, 400, 150, 24);
-  ctx.fill();
-
-  ctx.fillStyle = '#bfdbfe';
-  ctx.font = 'bold 20px Tahoma, Vazirmatn, sans-serif';
-  ctx.fillText('شماره نوبت اختصاصی', 400, 408);
-
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'black 72px Tahoma, sans-serif';
-  ctx.fillText(`#${params.appointment.queue_number}`, 400, 490);
-
-  // Customer & Service Info Details
-  ctx.textAlign = 'right';
-  let currentY = 575;
-
-  ctx.fillStyle = '#334155';
-  ctx.font = 'bold 24px Tahoma, Vazirmatn, sans-serif';
-  ctx.fillText(`👤 مشتری: ${params.appointment.customer_name}`, 680, currentY);
-
-  if (params.serviceName) {
-    currentY += 45;
-    ctx.fillText(`🏷️ خدمت درخواستی: ${params.serviceName}`, 680, currentY);
-  }
-
-  if (params.staffName) {
-    currentY += 45;
-    ctx.fillText(`👨‍💼 ارائه‌دهنده: ${params.staffName}`, 680, currentY);
-  }
-
-  // Metric Cards (People Ahead & Est Wait Time)
-  currentY += 45;
-
-  // Box 1: People Ahead
-  ctx.fillStyle = '#f8fafc';
-  ctx.strokeStyle = '#cbd5e1';
-  ctx.lineWidth = 1.5;
-  roundRect(ctx, 95, currentY, 280, 90, 18);
-  ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle = '#e4eef7';
+  ctx.lineWidth = 1.4;
+  roundRect(ctx, 24, 132, 672, 916, 34);
   ctx.stroke();
 
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#64748b';
-  ctx.font = 'bold 17px Tahoma, Vazirmatn, sans-serif';
-  ctx.fillText('افراد قبل از شما', 235, currentY + 32);
-  ctx.fillStyle = '#d97706'; // amber-600
-  ctx.font = 'bold 28px Tahoma, Vazirmatn, sans-serif';
-  ctx.fillText(`${params.peopleAhead} نفر`, 235, currentY + 70);
+  drawSuccessCard(ctx);
+  drawQueueCard(ctx, params.appointment.queue_number);
+  drawInformationCard(ctx, params);
+  drawWaitCard(ctx, params.estimatedWaitMinutes);
+  drawGraceNotice(ctx, params.business.noShowGraceMinutes ?? 5);
 
-  // Box 2: Est Wait Time
-  roundRect(ctx, 425, currentY, 280, 90, 18);
-  ctx.fillStyle = '#f8fafc';
-  ctx.fill();
-  ctx.stroke();
-
-  ctx.fillStyle = '#64748b';
-  ctx.font = 'bold 17px Tahoma, Vazirmatn, sans-serif';
-  ctx.fillText('زمان تقریبی انتظار', 565, currentY + 32);
-  ctx.fillStyle = '#2563eb'; // blue-600
-  ctx.font = 'bold 28px Tahoma, Vazirmatn, sans-serif';
-  ctx.fillText(`~${params.estimatedWaitMinutes} دقیقه`, 565, currentY + 70);
-
-  // Issue Date/Time Footer inside white box
-  const now = new Date();
-  const dateStr = isoToAfghaniDate(params.appointment.appointment_date || getKabulTodayISO()) + ' - ' + now.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
-  ctx.fillStyle = '#94a3b8';
-  ctx.font = '16px Tahoma, Vazirmatn, sans-serif';
-  ctx.fillText(`تاریخ و زمان ثبت: ${dateStr}`, 400, 905);
-
-  // 5. Card Bottom Notice
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 19px Tahoma, Vazirmatn, sans-serif';
-  ctx.fillText('📸 این تصویر در گالری گوشی شما ذخیره می‌شود (مناسب استفاده آفلاین)', 400, 985);
-
-  // 6. Trigger PNG Download
   const link = document.createElement('a');
   link.download = `nobatak-ticket-${params.appointment.queue_number}.png`;
   link.href = canvas.toDataURL('image/png');
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+}
+
+function drawSuccessCard(ctx: CanvasRenderingContext2D) {
+  ctx.fillStyle = '#f0fbf6';
+  ctx.strokeStyle = '#d7f1e4';
+  ctx.lineWidth = 1.2;
+  roundRect(ctx, 46, 156, 628, 112, 24);
+  ctx.fill();
+  ctx.stroke();
+
+  drawCheckIcon(ctx, 128, 212);
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#063f2e';
+  ctx.font = font(25, 900);
+  ctx.fillText('نوبت شما با موفقیت ثبت شد', 620, 198);
+  ctx.fillStyle = '#64748b';
+  ctx.font = font(18, 500);
+  ctx.fillText('لطفاً در محل کسب‌وکار منتظر بمانید', 620, 234);
+}
+
+function drawQueueCard(ctx: CanvasRenderingContext2D, queueNumber: number) {
+  const gradient = ctx.createLinearGradient(46, 286, 674, 526);
+  gradient.addColorStop(0, '#ddecff');
+  gradient.addColorStop(0.52, '#edf6ff');
+  gradient.addColorStop(1, '#d8ebff');
+  ctx.fillStyle = gradient;
+  roundRect(ctx, 46, 286, 628, 240, 24);
+  ctx.fill();
+
+  ctx.fillStyle = 'rgba(117, 182, 244, 0.25)';
+  ctx.beginPath();
+  ctx.ellipse(52, 515, 178, 122, -0.24, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.64)';
+  ctx.beginPath();
+  ctx.ellipse(157, 540, 155, 94, 0.18, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(118, 183, 245, 0.22)';
+  ctx.beginPath();
+  ctx.ellipse(676, 500, 190, 130, 0.22, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#0758c9';
+  ctx.font = font(42, 900);
+  ctx.fillText('نوبت', 360, 354);
+  ctx.font = font(102, 900);
+  ctx.fillText(queueNumber.toLocaleString('fa-AF'), 360, 446);
+}
+
+function drawInformationCard(ctx: CanvasRenderingContext2D, params: GenerateTicketParams) {
+  ctx.fillStyle = '#fbfcff';
+  ctx.strokeStyle = '#e5eaf2';
+  ctx.lineWidth = 1.2;
+  roundRect(ctx, 46, 544, 628, 202, 20);
+  ctx.fill();
+  ctx.stroke();
+  drawDivider(ctx, 46, 611, 674);
+  drawDivider(ctx, 46, 678, 674);
+
+  drawTagIcon(ctx, 636, 578);
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#64748b';
+  ctx.font = font(17, 500);
+  ctx.fillText('خدمت:', 596, 578);
+  ctx.fillStyle = '#111f39';
+  ctx.font = font(20, 800);
+  ctx.textAlign = 'center';
+  ctx.fillText(params.serviceName || 'ثبت نشده', 338, 578);
+
+  drawUserIcon(ctx, 636, 645);
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#64748b';
+  ctx.font = font(17, 500);
+  ctx.fillText('ارائه‌دهنده:', 596, 645);
+  ctx.fillStyle = '#111f39';
+  ctx.font = font(19, 800);
+  ctx.textAlign = 'center';
+  ctx.fillText(params.staffName || 'تعیین نشده', 405, 645);
+  ctx.strokeStyle = '#dce3ec';
+  ctx.beginPath();
+  ctx.moveTo(235, 625);
+  ctx.lineTo(235, 665);
+  ctx.stroke();
+  ctx.fillStyle = '#64748b';
+  ctx.font = font(16, 500);
+  ctx.fillText(`${params.peopleAhead.toLocaleString('fa-AF')} نفر در انتظار`, 137, 645);
+
+  drawCalendarIcon(ctx, 636, 712);
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#64748b';
+  ctx.font = font(16, 500);
+  ctx.fillText('تاریخ و زمان ثبت:', 596, 712);
+  ctx.fillStyle = '#16243d';
+  ctx.font = font(17, 700);
+  ctx.textAlign = 'left';
+  ctx.fillText(formatAppointmentDateTime(params.appointment), 72, 712);
+}
+
+function drawWaitCard(ctx: CanvasRenderingContext2D, estimatedWaitMinutes: number) {
+  ctx.fillStyle = '#edf6ff';
+  ctx.strokeStyle = '#e1effc';
+  ctx.lineWidth = 1;
+  roundRect(ctx, 46, 764, 628, 108, 20);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#53657c';
+  ctx.font = font(18, 500);
+  ctx.fillText('زمان تقریبی انتظار شما', 622, 794);
+  ctx.fillStyle = '#0763d7';
+  ctx.font = font(29, 900);
+  ctx.fillText(formatWaitTime(estimatedWaitMinutes), 622, 836);
+  drawClockIcon(ctx, 112, 818, '#076ce6', 30);
+}
+
+function drawGraceNotice(ctx: CanvasRenderingContext2D, graceMinutes: number) {
+  const normalizedGrace = Math.max(0, Math.round(graceMinutes));
+  ctx.fillStyle = '#fff1f3';
+  ctx.strokeStyle = '#ffd7dd';
+  ctx.lineWidth = 1.2;
+  roundRect(ctx, 46, 890, 628, 132, 20);
+  ctx.fill();
+  ctx.stroke();
+
+  drawClockIcon(ctx, 636, 930, '#d91537', 22);
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#cf1534';
+  ctx.font = font(20, 900);
+  const graceLabel = normalizedGrace === 0
+    ? 'مهلت حضور در محل: بدون مهلت اضافه'
+    : `مهلت حضور در محل: ${normalizedGrace.toLocaleString('fa-AF')} دقیقه`;
+  ctx.fillText(graceLabel, 598, 928);
+  ctx.fillStyle = '#58677b';
+  ctx.font = font(14, 500);
+  if (normalizedGrace === 0) {
+    ctx.fillText('پس از رسیدن نوبت باید در محل حضور داشته باشید.', 598, 968);
+    ctx.fillText('در غیر این‌صورت نوبت شما قابل لغو خواهد بود.', 598, 996);
+  } else {
+    ctx.fillText(`لطفاً حداکثر تا ${normalizedGrace.toLocaleString('fa-AF')} دقیقه پس از رسیدن نوبت، در محل حضور داشته باشید.`, 598, 968);
+    ctx.fillText('در غیر این‌صورت نوبت شما به صورت خودکار لغو خواهد شد.', 598, 996);
+  }
+}
+
+function formatAppointmentDateTime(appointment: GenerateTicketParams['appointment']) {
+  const createdAt = appointment.created_at ? new Date(appointment.created_at) : new Date();
+  const validDate = Number.isNaN(createdAt.getTime()) ? new Date() : createdAt;
+  const time = new Intl.DateTimeFormat('fa-AF', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'Asia/Kabul',
+  }).format(validDate);
+  return `${isoToAfghaniDate(appointment.appointment_date || getKabulTodayISO())} - ${time}`;
+}
+
+function formatWaitTime(minutes: number) {
+  const total = Math.max(0, Math.round(minutes));
+  if (total < 60) return `حدود ${total.toLocaleString('fa-AF')} دقیقه`;
+  const hours = Math.floor(total / 60);
+  const remaining = total % 60;
+  if (!remaining) return `حدود ${hours.toLocaleString('fa-AF')} ساعت`;
+  return `حدود ${hours.toLocaleString('fa-AF')} ساعت و ${remaining.toLocaleString('fa-AF')} دقیقه`;
+}
+
+function font(size: number, weight: number) {
+  return `${weight} ${size}px Vazirmatn, Tahoma, Arial, sans-serif`;
+}
+
+function drawDivider(ctx: CanvasRenderingContext2D, x1: number, y: number, x2: number) {
+  ctx.strokeStyle = '#e9edf3';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x1, y);
+  ctx.lineTo(x2, y);
+  ctx.stroke();
+}
+
+function drawCheckIcon(ctx: CanvasRenderingContext2D, x: number, y: number) {
+  const gradient = ctx.createLinearGradient(x - 35, y - 35, x + 35, y + 35);
+  gradient.addColorStop(0, '#49be72');
+  gradient.addColorStop(1, '#24a95d');
+  ctx.fillStyle = gradient;
+  ctx.beginPath();
+  ctx.arc(x, y, 36, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 8;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x - 17, y);
+  ctx.lineTo(x - 4, y + 14);
+  ctx.lineTo(x + 20, y - 16);
+  ctx.stroke();
+}
+
+function drawTagIcon(ctx: CanvasRenderingContext2D, x: number, y: number) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = '#61708a';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(-15, -14);
+  ctx.lineTo(4, -14);
+  ctx.lineTo(16, -2);
+  ctx.lineTo(-6, 20);
+  ctx.lineTo(-19, 7);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#fbfcff';
+  ctx.beginPath();
+  ctx.arc(2, -6, 3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawUserIcon(ctx: CanvasRenderingContext2D, x: number, y: number) {
+  ctx.fillStyle = '#61708a';
+  ctx.beginPath();
+  ctx.arc(x, y - 10, 10, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(x - 17, y + 18);
+  ctx.quadraticCurveTo(x - 15, y + 2, x, y + 2);
+  ctx.quadraticCurveTo(x + 15, y + 2, x + 17, y + 18);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawCalendarIcon(ctx: CanvasRenderingContext2D, x: number, y: number) {
+  ctx.strokeStyle = '#61708a';
+  ctx.fillStyle = '#61708a';
+  ctx.lineWidth = 3.5;
+  ctx.lineCap = 'round';
+  roundRect(ctx, x - 16, y - 15, 32, 31, 4);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x - 16, y - 5);
+  ctx.lineTo(x + 16, y - 5);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x - 8, y - 20);
+  ctx.lineTo(x - 8, y - 10);
+  ctx.moveTo(x + 8, y - 20);
+  ctx.lineTo(x + 8, y - 10);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(x - 7, y + 4, 2, 0, Math.PI * 2);
+  ctx.arc(x + 2, y + 4, 2, 0, Math.PI * 2);
+  ctx.arc(x + 9, y + 4, 2, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawClockIcon(ctx: CanvasRenderingContext2D, x: number, y: number, color: string, radius: number) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(4, radius / 5);
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x, y - radius * 0.52);
+  ctx.lineTo(x, y + 1);
+  ctx.lineTo(x + radius * 0.42, y + radius * 0.2);
+  ctx.stroke();
 }
 
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
