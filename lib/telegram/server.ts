@@ -42,10 +42,12 @@ export async function ticketStatus(id: string) {
   const { data: business, error: bizError } = await db.from('businesses').select('name,slug,is_active').eq('id', appointment.business_id).single();
   if (bizError) throw new Error('Business query failed');
   if (business.is_active === false) return null;
-  const queueQuery = db.from('appointments').select('id', { count: 'exact', head: true }).eq('business_id', appointment.business_id).eq('appointment_date', appointment.appointment_date).in('status', ['waiting', 'serving']).lt('queue_number', appointment.queue_number);
-  const { count, error: countError } = await (appointment.staff_id ? queueQuery.eq('staff_id', appointment.staff_id) : queueQuery.is('staff_id', null));
+  const queueQuery = db.from('appointments').select('id,status').eq('business_id', appointment.business_id).eq('appointment_date', appointment.appointment_date).in('status', ['waiting', 'serving']).lt('queue_number', appointment.queue_number);
+  const { data: aheadRows, error: countError } = await (appointment.staff_id ? queueQuery.eq('staff_id', appointment.staff_id) : queueQuery.is('staff_id', null));
   if (countError) throw new Error('Queue query failed');
-  const ahead = count ?? 0;
+  const ahead = aheadRows?.length ?? 0;
+  const servingAhead = aheadRows?.filter(row => row.status === 'serving').length ?? 0;
+  const nextAfterServing = appointment.status === 'waiting' && ahead === 1 && servingAhead === 1;
   let serviceDuration = 20;
   if (appointment.service_id) {
     const { data: service, error: serviceError } = await db.from('services').select('duration_minutes').eq('id', appointment.service_id).maybeSingle();
@@ -63,11 +65,14 @@ export async function ticketStatus(id: string) {
     staffName = staff?.name || 'کارمند پیشین';
   }
   const weekday = new Intl.DateTimeFormat('fa-AF', { weekday: 'long', timeZone: 'Asia/Kabul' }).format(new Date(appointment.appointment_date + 'T12:00:00Z'));
-  const labels: Record<string, string> = { waiting: `جایگاه فعلی شما در صف: ${(ahead + 1).toLocaleString('fa-AF')}\n${ahead.toLocaleString('fa-AF')} نفر قبل از شما هستند.`, serving: 'اکنون نوبت شماست؛ لطفاً به مسئول مراجعه کنید.', completed: 'نوبت شما انجام شده است.', cancelled: 'نوبت شما لغو شده است.' };
+  const waitingStatus = nextAfterServing
+    ? 'لطفاً هرچه عاجل خود را در محل حاضر کنید.\nدر صورت حاضر نبودن شما بعد از این نوبت، نوبت شما یک نفر به عقب انتقال خواهد یافت.'
+    : `جایگاه فعلی شما در صف: ${(ahead + 1).toLocaleString('fa-AF')}\n${ahead.toLocaleString('fa-AF')} نفر قبل از شما هستند.`;
+  const labels: Record<string, string> = { waiting: waitingStatus, serving: 'اکنون نوبت شماست؛ لطفاً به مسئول مراجعه کنید.', completed: 'نوبت شما انجام شده است.', cancelled: 'نوبت شما لغو شده است.' };
   const timing = appointment.status === 'waiting'
     ? `\n\n⏱ زمان تقریبی انتظار: ${estimatedWaitText}\n🕒 ساعت تقریبی رسیدن نوبت: ${estimatedTime}`
     : appointment.status === 'serving' ? '\n\n⏱ زمان انتظار: نوبت شما رسیده است.' : '';
-  return { appointment, business, ahead, estimatedTime, estimatedWaitMinutes, estimatedWaitText, text: `${business.name}\nنام مشتری: ${appointment.customer_name}\nشمارهٔ رسید: ${appointment.queue_number.toLocaleString('fa-AF')}\n${weekday}، ${isoToAfghaniDate(appointment.appointment_date)}\nکارمند / استاد: ${staffName}\n${labels[appointment.status] ?? 'وضعیت نوبت تغییر کرده است.'}${timing}`, fingerprint: `${appointment.appointment_date}:${appointment.status}:${appointment.status === 'completed' ? 0 : ahead}:${appointment.late_count ?? 0}`, near: appointment.appointment_date === getKabulTodayISO() && (appointment.status === 'serving' || appointment.status === 'waiting') };
+  return { appointment, business, ahead, estimatedTime, estimatedWaitMinutes, estimatedWaitText, text: `${business.name}\nنام مشتری: ${appointment.customer_name}\nشمارهٔ رسید: ${appointment.queue_number.toLocaleString('fa-AF')}\n${weekday}، ${isoToAfghaniDate(appointment.appointment_date)}\nکارمند / استاد: ${staffName}\n${labels[appointment.status] ?? 'وضعیت نوبت تغییر کرده است.'}${timing}`, fingerprint: `${appointment.appointment_date}:${appointment.status}:${appointment.status === 'completed' ? 0 : ahead}:${servingAhead}:${appointment.late_count ?? 0}`, near: appointment.appointment_date === getKabulTodayISO() && (appointment.status === 'serving' || appointment.status === 'waiting') };
 }
 export async function management(chat: string, origin: string) {
   const { data, error } = await database().from('telegram_subscriptions').select('appointment_id,appointments!inner(status)').eq('chat_id', chat).in('appointments.status', ['waiting', 'serving']).order('created_at', { ascending: false }).limit(10);
