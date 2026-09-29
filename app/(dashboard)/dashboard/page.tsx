@@ -19,7 +19,7 @@ import { getUserProfile, upsertUserProfile } from '@/lib/services/profile';
 import { getUserBusinesses, createBusiness, updateBusiness, deleteBusiness } from '@/lib/services/businesses';
 import { getBusinessServices, createService, updateService, deleteService } from '@/lib/services/services';
 import { getBusinessStaff, createStaff, updateStaff, deleteStaff } from '@/lib/services/staff';
-import { getBusinessAppointments, invalidateAppointmentReads, createAppointment, updateAppointmentStatus, deleteAppointment } from '@/lib/services/appointments';
+import { getBusinessAppointments, invalidateAppointmentReads, createAppointment, updateAppointmentStatus, moveAppointmentBack, deleteAppointment } from '@/lib/services/appointments';
 
 import { usePendingActions } from '@/lib/use-pending-actions';
 import { Button } from '@/components/ui/Button';
@@ -126,6 +126,8 @@ export default function DashboardPage() {
   const [selectedServiceId, setSelectedServiceId] = useState('');
   const [selectedStaffId, setSelectedStaffId] = useState('');
   const [appointmentSaving, setAppointmentSaving] = useState(false);
+  const [movingAppointment, setMovingAppointment] = useState<Appointment | null>(null);
+  const [moveSteps, setMoveSteps] = useState('1');
 
   const [isAutoRefreshing, setIsAutoRefreshing] = useState(false);
 
@@ -654,6 +656,28 @@ export default function DashboardPage() {
   const handleStatusChange = (id: string, status: AppointmentStatus) => runAction('appointment:' + id, () => mutateAppointment(id, status));
   const handleDeleteAppointmentItem = (id: string) => runAction('appointment:' + id, () => mutateAppointment(id, 'delete'));
 
+  const handleMoveAppointment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!movingAppointment) return;
+    const steps = Number(moveSteps);
+    if (!Number.isInteger(steps) || steps < 1 || steps > 100) {
+      setAlertMsg({ type: 'error', text: 'تعداد جایگاه باید عدد صحیح بین ۱ تا ۱۰۰ باشد.' });
+      return;
+    }
+    const appointment = movingAppointment;
+    await runAction('appointment:' + appointment.id, async () => {
+      const result = await moveAppointmentBack(appointment.id, steps);
+      if (!result.success) {
+        setAlertMsg({ type: 'error', text: result.error || 'انتقال نوبت انجام نشد.' });
+        return;
+      }
+      setMovingAppointment(null);
+      setMoveSteps('1');
+      setAlertMsg({ type: 'success', text: `نوبت ${Number(result.moved || steps).toLocaleString('fa-AF')} جایگاه به عقب منتقل شد.` });
+      if (selectedBusinessRef.current) await loadAppointmentsOnly(selectedBusinessRef.current.id, selectedDateRef.current);
+    });
+  };
+
   // Download ticket image for walk-in appointment from Owner Dashboard
   const handleOwnerDownloadTicket = (app: Appointment) => {
     return runAction('appointment:' + app.id, async () => {
@@ -1064,7 +1088,7 @@ export default function DashboardPage() {
                     </CardDescription>
                   </Card>
                 ) : (
-                  <StaffAppointmentTables pendingActions={pending} appointments={filteredAppointments} allAppointments={dateAppointments} staff={staffMembers} onStatusChange={handleStatusChange} onDelete={handleDeleteAppointmentItem} onDownload={handleOwnerDownloadTicket} />
+                  <StaffAppointmentTables pendingActions={pending} appointments={filteredAppointments} allAppointments={dateAppointments} staff={staffMembers} onStatusChange={handleStatusChange} onMove={(appointment) => { setMovingAppointment(appointment); setMoveSteps('1'); }} onDelete={handleDeleteAppointmentItem} onDownload={handleOwnerDownloadTicket} />
                 )}
               </div>
             )}
@@ -1524,6 +1548,33 @@ export default function DashboardPage() {
             </div>
           </fieldset>
         </form>
+      </Modal>
+
+      <Modal
+        isOpen={Boolean(movingAppointment)}
+        onClose={() => { if (!movingAppointment || !isPending('appointment:' + movingAppointment.id)) setMovingAppointment(null); }}
+        title="انتقال نوبت به عقب"
+        description={movingAppointment ? `تعیین کنید نوبت ${movingAppointment.customer_name} چند نفر به عقب منتقل شود.` : ''}
+      >
+        {movingAppointment && <form onSubmit={handleMoveAppointment} className="space-y-5">
+          <fieldset disabled={isPending('appointment:' + movingAppointment.id)} className="space-y-5">
+            <Input
+              label="تعداد نفر برای انتقال به عقب"
+              type="number"
+              min="1"
+              max="100"
+              step="1"
+              value={moveSteps}
+              onChange={(event) => setMoveSteps(event.target.value)}
+              required
+            />
+            <p className="text-xs leading-6 text-slate-500">مقدار پیش‌فرض ۱ است. اگر افراد کمتری بعد از این مشتری باشند، انتقال فقط به اندازهٔ افراد موجود انجام می‌شود.</p>
+            <div className="flex justify-end gap-3 border-t border-slate-100 pt-4">
+              <Button type="button" variant="outline" onClick={() => setMovingAppointment(null)}>انصراف</Button>
+              <Button type="submit" isLoading={isPending('appointment:' + movingAppointment.id)}>انتقال نوبت</Button>
+            </div>
+          </fieldset>
+        </form>}
       </Modal>
     </div>
   );

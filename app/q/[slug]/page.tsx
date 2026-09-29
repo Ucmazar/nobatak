@@ -578,7 +578,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
               {selectedAppointment.late_count > 0 && (
                 <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-7 text-amber-900" role="status">
                   <Clock3 size={20} className="mt-1 shrink-0 text-amber-600" aria-hidden="true" />
-                  <div><strong className="block">به دلیل تأخیر، نوبت شما یک جایگاه به عقب منتقل شد.</strong><span>تعداد تأخیر: {selectedAppointment.late_count.toLocaleString('fa-AF')}</span></div>
+                  <div><strong className="block">به دلیل تأخیر، نوبت شما به عقب منتقل شد.</strong><span>تعداد جایگاه‌های انتقال‌یافته: {selectedAppointment.late_count.toLocaleString('fa-AF')}</span></div>
                 </div>
               )}
 

@@ -8,7 +8,7 @@ export async function notifyQueueMovement(record: QueueMoveRecord, previous: Que
   const newQueue = Number(record.queue_number);
   const oldLate = Number(previous.late_count ?? 0);
   const newLate = Number(record.late_count ?? 0);
-  const movedBack = Number.isFinite(oldQueue) && newQueue > oldQueue && newLate === oldLate + 1;
+  const movedBack = Number.isFinite(oldQueue) && newQueue > oldQueue && newLate > oldLate;
   const movedForward = Number.isFinite(oldQueue) && newQueue < oldQueue && newLate === oldLate;
   if (!movedBack && !movedForward) return false;
 
@@ -26,8 +26,9 @@ export async function notifyQueueMovement(record: QueueMoveRecord, previous: Que
     const aheadText = status.ahead === 0
       ? 'اکنون کسی جلوتر از شما نیست و نوبت شما نزدیک است.'
       : `اکنون ${status.ahead.toLocaleString('fa-AF')} نفر جلوتر از شما ${status.ahead === 1 ? 'است' : 'هستند'}.`;
+    const movedPlaces = Math.max(1, newLate - oldLate);
     const message = movedBack
-      ? `نوبت شما به دلیل تأخیر یک جایگاه به عقب منتقل شد.\n\nزمان تقریبی جدید: ${status.estimatedTime}\nتعداد تأخیر: ${newLate.toLocaleString('fa-AF')}`
+      ? `نوبت شما به دلیل تأخیر ${movedPlaces.toLocaleString('fa-AF')} جایگاه به عقب منتقل شد.\n\nزمان تقریبی جدید: ${status.estimatedTime}\nتعداد تأخیر: ${newLate.toLocaleString('fa-AF')}`
       : `نوبت شما یک جایگاه جلو آمد.\n\n${aheadText}\nزمان تقریبی جدید نوبت: ${status.estimatedTime}`;
     await send(subscription.chat_id, message);
     const { error: doneError } = await db.from('telegram_subscriptions').update({ last_fingerprint: fingerprint, pending_fingerprint: null, lease_until: null }).eq('appointment_id', record.id).eq('pending_fingerprint', fingerprint);

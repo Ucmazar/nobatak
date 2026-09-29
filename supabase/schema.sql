@@ -130,7 +130,6 @@ CREATE TABLE IF NOT EXISTS public.appointments (
     status TEXT NOT NULL DEFAULT 'waiting' CHECK (status IN ('waiting', 'serving', 'completed', 'cancelled')),
     estimated_wait_minutes INT NOT NULL DEFAULT 0,
     late_count INT NOT NULL DEFAULT 0 CHECK (late_count >= 0),
-    late_deadline_at TIMESTAMPTZ,
     appointment_date DATE NOT NULL DEFAULT CURRENT_DATE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -138,7 +137,6 @@ CREATE TABLE IF NOT EXISTS public.appointments (
 
 ALTER TABLE public.appointments ADD COLUMN IF NOT EXISTS appointment_date DATE NOT NULL DEFAULT CURRENT_DATE;
 ALTER TABLE public.appointments ADD COLUMN IF NOT EXISTS late_count INT NOT NULL DEFAULT 0;
-ALTER TABLE public.appointments ADD COLUMN IF NOT EXISTS late_deadline_at TIMESTAMPTZ;
 
 CREATE INDEX IF NOT EXISTS idx_appointments_business_id ON public.appointments(business_id);
 CREATE INDEX IF NOT EXISTS idx_appointments_status ON public.appointments(status);
@@ -217,4 +215,3 @@ CREATE TRIGGER update_staff_updated_at BEFORE UPDATE ON public.staff FOR EACH RO
 
 DROP TRIGGER IF EXISTS update_appointments_updated_at ON public.appointments;
 CREATE TRIGGER update_appointments_updated_at BEFORE UPDATE ON public.appointments FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
-

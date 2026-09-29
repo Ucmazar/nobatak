@@ -104,6 +104,23 @@ export async function updateAppointmentStatus(id: string, status: AppointmentSta
   } catch { return { success: false, error: 'ارتباط با سرور برقرار نشد.' }; }
 }
 
+export async function moveAppointmentBack(id: string, steps: number): Promise<{ success: boolean; error: string | null; moved?: number }> {
+  try {
+    invalidateAppointmentReads();
+    const response = await fetch('/api/appointments/move', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, steps }),
+    });
+    const result = await response.json();
+    invalidateAppointmentReads();
+    if (!response.ok) return { success: false, error: result.error || 'انتقال نوبت انجام نشد.' };
+    return { success: true, error: null, moved: Number(result.moved) || steps };
+  } catch {
+    return { success: false, error: 'ارتباط با سرور برقرار نشد.' };
+  }
+}
+
 export async function deleteAppointment(id: string): Promise<{ success: boolean; error: string | null }> {
   try {
     invalidateAppointmentReads();

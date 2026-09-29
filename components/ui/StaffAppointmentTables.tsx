@@ -2,10 +2,11 @@ import { Appointment, AppointmentStatus, Staff } from '@/types/database';
 import { useMemo } from 'react';
 import { queuePositions } from '@/lib/queue';
 
-export function StaffAppointmentTables({ appointments, allAppointments, staff, pendingActions, onStatusChange, onDownload }: {
+export function StaffAppointmentTables({ appointments, allAppointments, staff, pendingActions, onStatusChange, onMove, onDownload }: {
   pendingActions: ReadonlySet<string>;
   appointments: Appointment[]; allAppointments: Appointment[]; staff: Staff[];
   onStatusChange: (id: string, status: AppointmentStatus) => void;
+  onMove: (appointment: Appointment) => void;
   onDelete?: (id: string) => void;
   onDownload: (appointment: Appointment) => void;
 }) {
@@ -31,6 +32,7 @@ export function StaffAppointmentTables({ appointments, allAppointments, staff, p
         <td data-label="وضعیت"><span className={`workspace-status-pill workspace-status-${app.status}`}>{labels[app.status]}</span></td>
         <td data-label="اقدام"><fieldset disabled={pendingActions.has('appointment:' + app.id)} aria-busy={pendingActions.has('appointment:' + app.id)} className="workspace-row-actions disabled:opacity-60 [&:disabled_button]:cursor-wait">
           {app.status === 'waiting' && <button type="button" onClick={() => onStatusChange(app.id, 'serving')} className="workspace-action-primary">شروع نوبت</button>}
+          {app.status === 'waiting' && <button type="button" onClick={() => onMove(app)} className="workspace-action-move">انتقال</button>}
           {app.status === 'serving' && <button type="button" onClick={() => onStatusChange(app.id, 'completed')} className="workspace-action-success">پایان نوبت</button>}
           {['waiting','serving'].includes(app.status) && <button type="button" onClick={() => onStatusChange(app.id, 'cancelled')}>لغو نوبت</button>}
           <button type="button" onClick={() => onDownload(app)}>دریافت رسید</button>
