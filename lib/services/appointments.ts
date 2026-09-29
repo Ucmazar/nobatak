@@ -93,10 +93,10 @@ export async function createAppointment(
   }
 }
 
-export async function updateAppointmentStatus(id: string, status: AppointmentStatus): Promise<{ success: boolean; error: string | null; warning?: string }> {
+export async function updateAppointmentStatus(id: string, status: AppointmentStatus, expected?: { queueNumber: number; lateCount: number }): Promise<{ success: boolean; error: string | null; warning?: string }> {
   try {
     invalidateAppointmentReads();
-    const response = await fetch('/api/appointments/status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, status }) });
+    const response = await fetch('/api/appointments/status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, status, expectedQueueNumber: expected?.queueNumber, expectedLateCount: expected?.lateCount }) });
     const result = await response.json();
     invalidateAppointmentReads();
     if (!response.ok) return { success: false, error: result.error || 'ذخیرهٔ وضعیت نوبت انجام نشد.' };

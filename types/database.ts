@@ -79,6 +79,8 @@ export interface Appointment {
   queue_number: number
   status: AppointmentStatus
   estimated_wait_minutes: number
+  late_count: number
+  late_deadline_at?: string | null
   appointment_date: string
   created_at: string
   updated_at: string
@@ -99,6 +101,7 @@ export interface Database {
       set_business_day_with_transfer: { Args: { p_business: string; p_date: string; p_closed: boolean; p_reason: string; p_request: string }; Returns: Json };
       set_business_day_booking: { Args: { p_business: string; p_closed: boolean; p_reason: string; p_cancel_today: boolean; p_request: string }; Returns: Json };
       daily_notice_summary: { Args: { p_business: string }; Returns: Json };
+      process_late_appointments: { Args: { p_limit?: number }; Returns: Json };
     }
     Enums: { [_ in never]: never }
     CompositeTypes: { [_ in never]: never }
@@ -150,10 +153,12 @@ export interface Database {
       appointments: {
         Row: { [K in keyof Appointment]: Appointment[K] }
         Relationships: []
-        Insert: Omit<Appointment, 'id' | 'created_at' | 'updated_at' | 'service' | 'staff'> & {
+        Insert: Omit<Appointment, 'id' | 'created_at' | 'updated_at' | 'service' | 'staff' | 'late_count' | 'late_deadline_at'> & {
           id?: string
           status?: AppointmentStatus
           estimated_wait_minutes?: number
+          late_count?: number
+          late_deadline_at?: string | null
           created_at?: string
           updated_at?: string
         }

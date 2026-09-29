@@ -25,7 +25,7 @@ export function StaffAppointmentTables({ appointments, allAppointments, staff, p
       <thead><tr>{['شماره', 'مشتری / خدمت', 'شماره تلفن', 'افراد قبل از شما', 'وضعیت', 'اقدام'].map(title => <th key={title} scope="col">{title}</th>)}</tr></thead>
       <tbody>{[...group.rows].sort((a,b) => a.queue_number-b.queue_number).map(app => <tr key={app.id} className={app.status === 'serving' ? 'is-serving' : ''}>
         <td data-label="شماره" className="workspace-queue-number">{app.queue_number.toLocaleString('fa-AF')}</td>
-        <td data-label="مشتری / خدمت"><div><p className="font-bold text-slate-900">{app.customer_name}</p><p className="text-xs text-slate-500">{app.service?.name || '—'}</p></div></td>
+        <td data-label="مشتری / خدمت"><div><p className="flex flex-wrap items-center gap-2 font-bold text-slate-900">{app.customer_name}{app.late_count > 0 && <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-extrabold text-amber-700">تأخیر {app.late_count.toLocaleString('fa-AF')}</span>}</p><p className="text-xs text-slate-500">{app.service?.name || '—'}</p></div></td>
         <td data-label="شماره تلفن"><span dir="ltr" className="inline-block">{app.customer_phone || '—'}</span></td>
         <td data-label="افراد قبل از شما">{app.status === 'waiting' ? (positions.get(app.id) ?? 0).toLocaleString('fa-AF') : '—'}</td>
         <td data-label="وضعیت"><span className={`workspace-status-pill workspace-status-${app.status}`}>{labels[app.status]}</span></td>

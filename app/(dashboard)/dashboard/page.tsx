@@ -636,7 +636,7 @@ export default function DashboardPage() {
     setAppointments(previous => overlayQueue(previous, queueChanges.current));
     let success = false;
     try {
-      const result = change === 'delete' ? await deleteAppointment(id) : await updateAppointmentStatus(id, change);
+      const result = change === 'delete' ? await deleteAppointment(id) : await updateAppointmentStatus(id, change, change === 'serving' ? { queueNumber: original.queue_number, lateCount: original.late_count ?? 0 } : undefined);
       success = result.success;
       setAlertMsg({ type: success ? 'success' : 'error', text: success ? 'تغییر نوبت ذخیره شد.' : result.error || 'ذخیره انجام نشد؛ دوباره تلاش کنید.' });
     } catch {
