@@ -50,6 +50,11 @@ export async function POST(request: Request) {
       await send(chat, 'اعلان‌ها قطع شدند؛ نوبت‌های شما لغو نشده‌اند. برای فعال‌سازی دوباره، دکمهٔ تلگرام روی رسید را بزنید.');
     } else if (text === 'مدیریت نوبت‌ها') {
       await management(chat, publicOrigin(request.url));
+    } else if (text === 'وضعیت نوبت من' || text === '/status') {
+      const { data, error } = await db.from('telegram_subscriptions').select('appointment_id,appointments!inner(status)').eq('chat_id', chat).in('appointments.status', ['waiting', 'serving']).order('created_at', { ascending: false });
+      if (error) throw new Error('Read failed');
+      if (!data?.length) await send(chat, 'نوبت فعالی به این حساب وصل نیست. نوبت‌های انجام‌شده و لغوشده نمایش داده نمی‌شوند.');
+      else for (const row of data) { const status = await ticketStatus(row.appointment_id); if (status && ['waiting', 'serving'].includes(status.appointment.status)) await send(chat, status.text); }
     } else {
       const { data, error } = await db.from('telegram_subscriptions').select('appointment_id,appointments!inner(status)').eq('chat_id', chat).in('appointments.status', ['waiting', 'serving']).order('created_at', { ascending: false });
       if (error) throw new Error('Read failed');
