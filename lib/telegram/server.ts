@@ -66,7 +66,7 @@ export async function ticketStatus(id: string) {
   }
   const weekday = new Intl.DateTimeFormat('fa-AF', { weekday: 'long', timeZone: 'Asia/Kabul' }).format(new Date(appointment.appointment_date + 'T12:00:00Z'));
   const waitingStatus = nextAfterServing
-    ? 'لطفاً هرچه عاجل خود را در محل حاضر کنید.\nدر صورت حاضر نبودن شما بعد از این نوبت، نوبت شما یک نفر به عقب انتقال خواهد یافت.'
+    ? 'لطفاً هرچه عاجل‌تر خود را به محل کسب‌وکار برسانید.\nپس از پایان نوبت فردِ در حال خدمت، اگر در محل حاضر نباشید، نوبت شما توسط صاحب کسب‌وکار یک جایگاه به عقب منتقل می‌شود.'
     : `جایگاه فعلی شما در صف: ${(ahead + 1).toLocaleString('fa-AF')}\n${ahead.toLocaleString('fa-AF')} نفر قبل از شما هستند.`;
   const labels: Record<string, string> = { waiting: waitingStatus, serving: 'اکنون نوبت شماست؛ لطفاً به مسئول مراجعه کنید.', completed: 'نوبت شما انجام شده است.', cancelled: 'نوبت شما لغو شده است.' };
   const timing = appointment.status === 'waiting'
