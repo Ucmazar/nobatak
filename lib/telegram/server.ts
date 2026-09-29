@@ -23,6 +23,17 @@ export async function send(chat: string, text: string, markup: object = keyboard
   const result = await response.json();
   if (!response.ok || !result.ok) throw new Error('Telegram delivery failed');
 }
+
+function formatEstimatedWait(minutes: number) {
+  const total = Math.max(0, Math.round(minutes));
+  if (total === 0) return 'کمتر از ۱ دقیقه';
+  if (total < 60) return `حدود ${total.toLocaleString('fa-AF')} دقیقه`;
+  const hours = Math.floor(total / 60);
+  const remaining = total % 60;
+  if (remaining === 0) return `حدود ${hours.toLocaleString('fa-AF')} ساعت`;
+  return `حدود ${hours.toLocaleString('fa-AF')} ساعت و ${remaining.toLocaleString('fa-AF')} دقیقه`;
+}
+
 export async function ticketStatus(id: string) {
   const db = database();
   const { data: appointment, error } = await db.from('appointments').select('id,business_id,service_id,staff_id,customer_name,queue_number,status,appointment_date,late_count').eq('id', id).maybeSingle();
@@ -41,7 +52,9 @@ export async function ticketStatus(id: string) {
     if (serviceError) throw new Error('Service query failed');
     serviceDuration = service?.duration_minutes || 20;
   }
-  const estimatedAt = new Date(Date.now() + ahead * serviceDuration * 60000);
+  const estimatedWaitMinutes = ahead * serviceDuration;
+  const estimatedWaitText = formatEstimatedWait(estimatedWaitMinutes);
+  const estimatedAt = new Date(Date.now() + estimatedWaitMinutes * 60000);
   const estimatedTime = new Intl.DateTimeFormat('fa-AF', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Kabul' }).format(estimatedAt);
   let staffName = 'بدون انتخاب کارمند';
   if (appointment.staff_id) {
@@ -50,8 +63,8 @@ export async function ticketStatus(id: string) {
     staffName = staff?.name || 'کارمند پیشین';
   }
   const weekday = new Intl.DateTimeFormat('fa-AF', { weekday: 'long', timeZone: 'Asia/Kabul' }).format(new Date(appointment.appointment_date + 'T12:00:00Z'));
-  const labels: Record<string, string> = { waiting: `جایگاه فعلی شما در صف: ${(ahead + 1).toLocaleString('fa-AF')}\n${ahead.toLocaleString('fa-AF')} نفر قبل از شما هستند.`, serving: 'اکنون نوبت شماست؛ لطفاً به مسئول مراجعه کنید.', completed: 'نوبت شما انجام شده است.', cancelled: 'نوبت شما لغو شده است.' };
-  return { appointment, business, ahead, estimatedTime, text: `${business.name}\nنام مشتری: ${appointment.customer_name}\nشمارهٔ رسید: ${appointment.queue_number.toLocaleString('fa-AF')}\n${weekday}، ${isoToAfghaniDate(appointment.appointment_date)}\nکارمند / استاد: ${staffName}\n${labels[appointment.status] ?? 'وضعیت نوبت تغییر کرده است.'}`, fingerprint: `${appointment.appointment_date}:${appointment.status}:${appointment.status === 'completed' ? 0 : ahead}:${appointment.late_count ?? 0}`, near: appointment.appointment_date === getKabulTodayISO() && (appointment.status === 'serving' || appointment.status === 'waiting') };
+  const labels: Record<string, string> = { waiting: `جایگاه فعلی شما در صف: ${(ahead + 1).toLocaleString('fa-AF')}\n${ahead.toLocaleString('fa-AF')} نفر قبل از شما هستند.\nزمان تقریبی تا نوبت: ${estimatedWaitText}`, serving: 'اکنون نوبت شماست؛ لطفاً به مسئول مراجعه کنید.', completed: 'نوبت شما انجام شده است.', cancelled: 'نوبت شما لغو شده است.' };
+  return { appointment, business, ahead, estimatedTime, estimatedWaitMinutes, estimatedWaitText, text: `${business.name}\nنام مشتری: ${appointment.customer_name}\nشمارهٔ رسید: ${appointment.queue_number.toLocaleString('fa-AF')}\n${weekday}، ${isoToAfghaniDate(appointment.appointment_date)}\nکارمند / استاد: ${staffName}\n${labels[appointment.status] ?? 'وضعیت نوبت تغییر کرده است.'}`, fingerprint: `${appointment.appointment_date}:${appointment.status}:${appointment.status === 'completed' ? 0 : ahead}:${appointment.late_count ?? 0}`, near: appointment.appointment_date === getKabulTodayISO() && (appointment.status === 'serving' || appointment.status === 'waiting') };
 }
 export async function management(chat: string, origin: string) {
   const { data, error } = await database().from('telegram_subscriptions').select('appointment_id,appointments!inner(status)').eq('chat_id', chat).in('appointments.status', ['waiting', 'serving']).order('created_at', { ascending: false }).limit(10);

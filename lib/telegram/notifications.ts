@@ -28,8 +28,8 @@ export async function notifyQueueMovement(record: QueueMoveRecord, previous: Que
       : `اکنون ${status.ahead.toLocaleString('fa-AF')} نفر جلوتر از شما ${status.ahead === 1 ? 'است' : 'هستند'}.`;
     const movedPlaces = Math.max(1, newLate - oldLate);
     const message = movedBack
-      ? `نوبت شما به دلیل تأخیر ${movedPlaces.toLocaleString('fa-AF')} جایگاه به عقب منتقل شد.\n\nزمان تقریبی جدید: ${status.estimatedTime}\nتعداد تأخیر: ${newLate.toLocaleString('fa-AF')}`
-      : `نوبت شما یک جایگاه جلو آمد.\n\n${aheadText}\nزمان تقریبی جدید نوبت: ${status.estimatedTime}`;
+      ? `نوبت شما به دلیل تأخیر ${movedPlaces.toLocaleString('fa-AF')} جایگاه به عقب منتقل شد.\n\nزمان تقریبی جدید تا نوبت: ${status.estimatedWaitText}\nتعداد تأخیر: ${newLate.toLocaleString('fa-AF')}`
+      : `نوبت شما یک جایگاه جلو آمد.\n\n${aheadText}\nزمان تقریبی جدید تا نوبت: ${status.estimatedWaitText}`;
     await send(subscription.chat_id, message);
     const { error: doneError } = await db.from('telegram_subscriptions').update({ last_fingerprint: fingerprint, pending_fingerprint: null, lease_until: null }).eq('appointment_id', record.id).eq('pending_fingerprint', fingerprint);
     if (doneError) throw new Error('Notice update failed');
