@@ -32,7 +32,7 @@ export function downloadTicketImage(params: GenerateTicketParams) {
   const logo = new Image();
   logo.onload = () => renderAndDownload(canvas, ctx, params, logo);
   logo.onerror = () => renderAndDownload(canvas, ctx, params);
-  logo.src = '/logo-transparent.png';
+  logo.src = '/nobat-logo.png';
 }
 
 function renderAndDownload(

@@ -56,7 +56,7 @@ export function DisabledAccountNotice({ initialAccess, initialBlockingBusinesses
       <div className={styles.content}>
         {/* The original PNG brand asset; no replacement or recreation of the logo. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <Image src="/logo-transparent.png" width={184} height={100} sizes="(max-width: 640px) 92px, 184px" alt="نوبت، سیستم مدیریت نوبت" className={styles.logo} />
+        <Image src="/nobat-logo.png" width={184} height={100} sizes="(max-width: 640px) 92px, 184px" alt="نوبت، سیستم مدیریت نوبت" className={styles.logo} />
         <span className={styles.status}><span />{unavailable ? 'در انتظار اتصال' : 'دسترسی موقتاً غیرفعال است'}</span>
         <h1 id="access-title">{unavailable ? 'اتصال را دوباره بررسی کنیم' : businessDisabled ? 'کسب‌وکار شما غیرفعال است' : 'حساب شما غیرفعال است'}</h1>
         <p role="status" aria-live="polite" className={styles.description}>{unavailable

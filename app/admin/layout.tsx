@@ -21,7 +21,7 @@ export default function AdminLayout({
           <div className="flex items-center gap-4">
             <Link href="/" className="flex items-center gap-2">
               <Image
-                src="/logo-transparent.png"
+                src="/nobat-logo.png"
                 width={184}
                 height={100}
                 sizes="(max-width: 640px) 92px, 184px"

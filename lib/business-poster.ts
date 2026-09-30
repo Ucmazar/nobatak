@@ -25,7 +25,7 @@ export async function makeBusinessPoster(name: string, url: string, phone?: stri
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Canvas unavailable');
   const qr = await QRCode.toCanvas(url, { width: 1040, margin: 4, errorCorrectionLevel: 'M', color: { dark: '#0f172aff', light: '#ffffffff' } });
-  const logo = new Image(); logo.src = '/logo-transparent.png';
+  const logo = new Image(); logo.src = '/nobat-logo.png';
   await logo.decode();
   ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, 1600, 2263);
   ctx.strokeStyle = '#0891b2'; ctx.lineWidth = 7; ctx.beginPath(); ctx.roundRect(50, 50, 1500, 2163, 45); ctx.stroke();

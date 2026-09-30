@@ -790,7 +790,7 @@ export default function DashboardPage() {
       <header className="workspace-header sticky top-0 z-30 text-white">
         <div className="mx-auto flex min-h-20 max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
           <Link href="/" className="flex items-center gap-3">
-            <Image src="/logo-transparent.png" width={184} height={100} sizes="92px" alt="نوبت" className="h-10 w-auto object-contain" priority />
+            <Image src="/nobat-logo.png" width={184} height={100} sizes="92px" alt="نوبت" className="h-10 w-auto object-contain" priority />
             <strong className="text-sm sm:text-xl">نوبت - {isoToAfghaniDate(selectedDate)}</strong>
           </Link>
           <div className="workspace-header-actions flex min-w-0 flex-wrap items-center gap-2">

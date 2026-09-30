@@ -27,7 +27,7 @@
   <a class="skip" href="#main">رفتن به محتوای اصلی</a>
   <header class="hero">
     <div class="wrap">
-      <div class="brand"><a class="brand-home" href="/"><img src="/logo-transparent.png" alt="لوگوی نوبت"><span>وقت شما ارزشمند است</span></a><a class="back-home" href="/">بازگشت به صفحهٔ اصلی</a></div>
+      <div class="brand"><a class="brand-home" href="/"><img src="/nobat-logo.png" alt="لوگوی نوبت"><span>وقت شما ارزشمند است</span></a><a class="back-home" href="/">بازگشت به صفحهٔ اصلی</a></div>
       <div class="hero-grid"><div><span class="eyebrow">مرجع رسمی‌سازی آموزش</span><h1>راهنمای کامل سیستم نوبت</h1><p class="lead">آموزش قدم‌به‌قدم استفاده از سیستم مدیریت نوبت و صف، همراه با نقشهٔ صفحات و جزئیات فنی نسخهٔ فعلی.</p></div><p class="hero-note">تمام مطالب این سند از Routeها، کامپوننت‌ها، سرویس‌ها و فایل‌های SQL پروژه استخراج شده‌اند. امکانات وابسته به تنظیمات سرور یا Migration با برچسب جدا مشخص شده‌اند.</p></div>
     </div>
   </header>
@@ -113,7 +113,7 @@ RESEND_API_KEY
 CONTACT_FROM_EMAIL</div><p>فقط نام متغیرها درج شده و هیچ مقدار، Token یا Secret در این سند وجود ندارد.</p></details><details><summary>Migrationها و وضعیت نصب</summary><p>فایل‌های schema، realtime، capacity، working hours، device limits، free plan، plan feature access، suspension، daily booking، transfer، auto cancel، Telegram و indexها در پوشهٔ <code>supabase</code> وجود دارند. وجود فایل به معنی نصب در Production نیست؛ پیام‌های کد نیز در چند نقطه نبودن Migration را گزارش می‌کنند. وضعیت نصب باید در Supabase Production بررسی شود.</p></details><details><summary>روش تعیین شماره و جایگاه صف</summary><p>Trigger <code>assign_booking_queue_number</code> زیر قفل ردیف کسب‌وکار، بیشترین شمارهٔ همان تاریخ را یک واحد افزایش می‌دهد. کلاینت نیز پیش از Insert مقدار پیشنهادی می‌سازد. جایگاه با شمارش waiting/serving با شمارهٔ کمتر در همان تاریخ و همان کارمند محاسبه می‌شود.</p></details><details><summary>محدودیت‌های تأییدشده</summary><p>پنل کارمند، پرداخت آنلاین، قیمت خدمت، لغو خودکار بعد از مهلت حضور و UI قابل مشاهدهٔ فیلتر کارمند وجود ندارند. نام Super Admin ثابت است. GoogleSignInButton و AppointmentCard ساخته شده‌اند اما در Routeهای فعلی استفاده نمی‌شوند.</p></details><p class="print-note">مبنای بررسی: شاخهٔ main پروژه در commit 9b32243 و فایل‌های محلی بدون تغییرِ کد برنامه.</p></section>
     </main>
   </div>
-  <footer class="footer"><div class="footer-brand"><img src="/logo-transparent.png" alt="نوبت"><div><strong>نوبت</strong><span>راهنمای استفاده از سیستم</span></div></div><p>برای احترام به وقت یکدیگر · همراه کسب‌وکارها و مشتریان در افغانستان</p><a href="/">بازگشت به صفحهٔ اصلی نوبت</a></footer>
+  <footer class="footer"><div class="footer-brand"><img src="/nobat-logo.png" alt="نوبت"><div><strong>نوبت</strong><span>راهنمای استفاده از سیستم</span></div></div><p>برای احترام به وقت یکدیگر · همراه کسب‌وکارها و مشتریان در افغانستان</p><a href="/">بازگشت به صفحهٔ اصلی نوبت</a></footer>
   <script>
     (()=>{
       const input=document.getElementById('guide-search');const clear=document.getElementById('clear-search');const status=document.getElementById('search-status');const empty=document.getElementById('no-results');const sections=[...document.querySelectorAll('.doc-section')];const desktop=[...document.querySelectorAll('#desktop-nav a')];
