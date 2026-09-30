@@ -87,14 +87,14 @@ export default function RegisterPage() {
         {/* Logo Branding */}
         <div className="text-center space-y-2">
           <Link href="/" className="inline-flex items-center gap-2.5">
-            <Image src="/logo-transparent.png" width={184} height={100} sizes="(max-width: 640px) 92px, 184px" alt="نوبتک" className="h-12 w-auto object-contain mx-auto" />
+            <Image src="/logo-transparent.png" width={184} height={100} sizes="(max-width: 640px) 92px, 184px" alt="نوبت" className="h-12 w-auto object-contain mx-auto" />
           </Link>
           <p className="text-xs text-slate-500">ایجاد حساب رایگان و شروع نوبت‌دهی</p>
         </div>
 
         <Card className="shadow-lg border-slate-200/80">
           <CardHeader>
-            <CardTitle>ثبت‌نام در نوبتک</CardTitle>
+            <CardTitle>ثبت‌نام در نوبت</CardTitle>
             <CardDescription>اطلاعات خود را برای ساخت حساب جدید وارد نمایید</CardDescription>
           </CardHeader>
 

@@ -412,7 +412,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
         <div className="mx-auto flex min-h-20 max-w-5xl items-center justify-between gap-4 px-4 py-4">
           <Link href="/" className="flex min-w-0 items-center gap-3">
             <span className="booking-header-icon"><CalendarDays size={24} aria-hidden="true" /></span>
-            <span className="min-w-0"><strong className="block truncate text-lg sm:text-2xl">نوبتک - در {business.name}</strong>{business.description && <small className="mt-1 block truncate text-[11px] text-blue-100/80 sm:text-xs">{business.description}</small>}</span>
+            <span className="min-w-0"><strong className="block truncate text-lg sm:text-2xl">نوبت - در {business.name}</strong>{business.description && <small className="mt-1 block truncate text-[11px] text-blue-100/80 sm:text-xs">{business.description}</small>}</span>
           </Link>
           <div className="flex items-center gap-2">
             {myAppointments.length > 0 && (
@@ -538,7 +538,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
 
               <div className="booking-success-mark"><Check size={34} strokeWidth={3} aria-hidden="true" /></div>
               <Badge variant="emerald" className="mx-auto mt-1">نوبت شما برای {isoToAfghaniDate(selectedAppointment.appointment_date || selectedDate)} فعال است</Badge>
-              <CardTitle className="mt-3 text-2xl font-extrabold text-slate-950 sm:text-3xl">رسید آنلاین نوبتک</CardTitle>
+              <CardTitle className="mt-3 text-2xl font-extrabold text-slate-950 sm:text-3xl">رسید آنلاین نوبت</CardTitle>
               <CardDescription className="mt-1 text-sm leading-7">
                 مشتری گرامی <strong className="text-slate-900">{selectedAppointment.customer_name}</strong>، رسید نوبت شما برای <strong className="font-bold text-blue-700">{isoToAfghaniDate(selectedAppointment.appointment_date || selectedDate)}</strong>:
               </CardDescription>
@@ -729,7 +729,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
       </main>
 
       <footer className="mt-auto border-t border-slate-200 py-6 text-center text-xs text-slate-400">
-        قدرت گرفته از سیستم مدیریت نوبت‌دهی آنلاین <strong className="text-slate-600">نوبتک</strong>
+        قدرت گرفته از سیستم مدیریت نوبت‌دهی آنلاین <strong className="text-slate-600">نوبت</strong>
       </footer>
     </div>
   );

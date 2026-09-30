@@ -1,4 +1,4 @@
-# Nobatak performance audit — 2026-09-26
+# Nobat performance audit — 2026-09-26
 
 Baseline: e391cfa. Scope: local source/build and deterministic tests; live production latency and Supabase query plans are not assumed measured.
 

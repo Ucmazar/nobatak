@@ -10,7 +10,7 @@ export function Footer() {
             <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-lg">
               ن
             </div>
-            <span className="text-lg font-bold text-slate-900">نوبتک</span>
+            <span className="text-lg font-bold text-slate-900">نوبت</span>
             <span className="text-xs text-slate-400">| سیستم عمومی نوبت‌دهی آنلاین کسب‌وکارها</span>
           </div>
 
@@ -27,7 +27,7 @@ export function Footer() {
           </div>
 
           <p className="text-xs text-slate-400">
-            تمام حقوق برای سیستم نوبت‌دهی «نوبتک» محفوظ است.
+            تمام حقوق برای سیستم نوبت‌دهی «نوبت» محفوظ است.
           </p>
         </div>
       </div>

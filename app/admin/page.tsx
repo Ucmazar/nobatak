@@ -181,9 +181,9 @@ export default function AdminDashboardPage() {
       {/* Welcome & Stats Row */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">مرکز مدیریت نوبتک</h1>
+          <h1 className="text-2xl font-bold text-white">مرکز مدیریت نوبت</h1>
           <p className="text-slate-400 text-sm mt-1">
-            خوش آمدید <span className="text-indigo-400 font-semibold">fahimadmin</span> — مدیریت کامل سیستم نوبتک
+            خوش آمدید <span className="text-indigo-400 font-semibold">fahimadmin</span> — مدیریت کامل سیستم نوبت
           </p>
         </div>
         <button

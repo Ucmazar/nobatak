@@ -37,7 +37,7 @@ export async function makeBusinessPoster(name: string, url: string, phone?: stri
     ctx.font = `${bold ? 'bold ' : ''}${size}px Tahoma, Arial, sans-serif`;
     ctx.fillText(text, 800, y, 1340);
   }
-  line('نوبتک | سیستم مدیریت نوبت', 365, 34, '#0e7490');
+  line('نوبت | سیستم مدیریت نوبت', 365, 34, '#0e7490');
   line(new URL(url).host, 415, 30, '#64748b', false, 'ltr');
   // Wrap business names so long names remain readable on the printed poster.
   ctx.font = 'bold 76px Tahoma, Arial, sans-serif';
@@ -54,7 +54,7 @@ export async function makeBusinessPoster(name: string, url: string, phone?: stri
     line('تماس کسب‌وکار', 2010, 30, '#64748b');
     line(phone, 2070, 48, '#0f172a', true, 'ltr');
   }
-  line('نوبت‌دهی آسان با نوبتک', 2160, 27, '#64748b');
+  line('نوبت‌دهی آسان با نوبت', 2160, 27, '#64748b');
   return canvas.toDataURL('image/png');
 }
 

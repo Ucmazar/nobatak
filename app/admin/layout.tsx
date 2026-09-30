@@ -25,14 +25,14 @@ export default function AdminLayout({
                 width={184}
                 height={100}
                 sizes="(max-width: 640px) 92px, 184px"
-                alt="نوبتک"
+                alt="نوبت"
                 className="h-10 w-auto object-contain"
               />
             </Link>
 
             <div className="flex items-center">
               <span className="text-lg font-bold text-white">
-                نوبتک
+                نوبت
               </span>
 
               <span className="mr-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-xs text-amber-400">

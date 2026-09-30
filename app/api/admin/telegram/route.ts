@@ -27,7 +27,7 @@ async function inspect(request: Request, register: boolean) {
   const origin = publicOrigin(request.url);
   const webhook = new URL('/api/telegram/webhook', origin).href;
   const me = await telegram('getMe');
-  if (me.username?.toLowerCase() !== 'nobatech_bot') return json({ message: 'توکن ذخیره‌شده متعلق به ربات نوبتک نیست.' }, 409);
+  if (me.username?.toLowerCase() !== 'nobatech_bot') return json({ message: 'توکن ذخیره‌شده متعلق به ربات نوبت نیست.' }, 409);
   if (register) await telegram('setWebhook', { url: webhook, secret_token: process.env.TELEGRAM_WEBHOOK_SECRET, allowed_updates: ['message'] });
   const info = await telegram('getWebhookInfo');
   const connected = info.url === webhook;

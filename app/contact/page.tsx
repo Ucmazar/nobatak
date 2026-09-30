@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
 import { MarketingShell, PageIntro } from '@/components/marketing/MarketingShell';
 import { ContactForm } from '@/components/marketing/ContactForm';
-export const metadata: Metadata={title:'ارتباط با ما | نوبتک'};
+export const metadata: Metadata={title:'ارتباط با ما | نوبت'};
 export default function Page(){return <MarketingShell><main id="main-content"><PageIntro eyebrow="ما می‌شنویم" title="یک پیام تا ارتباط با ما" description="پرسش، پیشنهاد یا مشکلی دارید؟ برای ما بنویسید. برای تغییر زمان یا خدمتِ یک نوبت، ابتدا با همان کسب‌وکار تماس بگیرید."/><section className="mk-wrap mk-section mk-about-grid" style={{alignItems:'start'}}><div><p className="mk-eyebrow">راه‌های ارتباط</p><h2>گفت‌وگو را<br/>از همین‌جا شروع کنیم.</h2><p>در واتساپ پیام بگذارید یا از فرم این صفحه استفاده کنید.</p><a className="mk-btn" style={{marginTop:24}} href="https://wa.me/93780340446" target="_blank" rel="noopener noreferrer">گفت‌وگو در واتساپ <bdi>0780340446</bdi></a><p><a href="mailto:fahimullahrasty@gmail.com"><bdi>fahimullahrasty@gmail.com</bdi></a></p><p className="mk-note">برای پیگیری مشکل، نام کسب‌وکار و توضیح خطا را بنویسید. نیازی به ارسال رمز یا اطلاعات محرمانه نیست.</p></div><ContactForm/></section></main></MarketingShell>}

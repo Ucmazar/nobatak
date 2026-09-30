@@ -60,7 +60,7 @@ function renderAndDownload(
     ctx.textAlign = 'right';
     ctx.fillStyle = '#0758c9';
     ctx.font = font(34, 900);
-    ctx.fillText('نوبتک', 675, 62);
+    ctx.fillText('نوبت', 675, 62);
     ctx.fillStyle = '#53657c';
     ctx.font = font(13, 500);
     ctx.fillText('سیستم هوشمند نوبت‌دهی', 675, 91);

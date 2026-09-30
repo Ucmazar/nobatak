@@ -790,8 +790,8 @@ export default function DashboardPage() {
       <header className="workspace-header sticky top-0 z-30 text-white">
         <div className="mx-auto flex min-h-20 max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
           <Link href="/" className="flex items-center gap-3">
-            <Image src="/logo-transparent.png" width={184} height={100} sizes="92px" alt="نوبتک" className="h-10 w-auto object-contain" priority />
-            <strong className="text-sm sm:text-xl">نوبتک - {isoToAfghaniDate(selectedDate)}</strong>
+            <Image src="/logo-transparent.png" width={184} height={100} sizes="92px" alt="نوبت" className="h-10 w-auto object-contain" priority />
+            <strong className="text-sm sm:text-xl">نوبت - {isoToAfghaniDate(selectedDate)}</strong>
           </Link>
           <div className="workspace-header-actions flex min-w-0 flex-wrap items-center gap-2">
             {selectedBusiness && <span className="hidden max-w-48 truncate text-xs font-bold text-blue-100 md:block">داشبورد {selectedBusiness.name}</span>}
@@ -803,7 +803,7 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      {planDaysRemaining !== null && planDaysRemaining <= 3 && <div className="mx-auto w-full max-w-7xl px-4 pt-4 sm:px-6 lg:px-8"><div role="status" className={`workspace-plan-alert flex flex-col justify-between gap-3 rounded-2xl border p-4 text-sm font-semibold sm:flex-row sm:items-center ${planExpired ? 'border-rose-300 bg-rose-50 text-rose-900' : 'border-amber-300 bg-amber-50 text-amber-900'}`}><span>{planExpired ? 'مدت پلن شما به پایان رسیده است. برای تمدید با مدیریت نوبتک ارتباط بگیرید؛ تنظیمات پلن سفارشی شما محفوظ است.' : planDaysRemaining === 0 ? 'پلن شما امروز به پایان می‌رسد. برای تمدید با مدیریت نوبتک ارتباط بگیرید.' : `پلن شما تا ${planDaysRemaining.toLocaleString('fa-AF')} روز دیگر به پایان می‌رسد. برای تمدید با مدیریت نوبتک ارتباط بگیرید.`}</span><Link href="/contact" className="shrink-0 rounded-xl border border-current px-4 py-2 text-center text-xs font-bold">تمدید اشتراک</Link></div></div>}
+      {planDaysRemaining !== null && planDaysRemaining <= 3 && <div className="mx-auto w-full max-w-7xl px-4 pt-4 sm:px-6 lg:px-8"><div role="status" className={`workspace-plan-alert flex flex-col justify-between gap-3 rounded-2xl border p-4 text-sm font-semibold sm:flex-row sm:items-center ${planExpired ? 'border-rose-300 bg-rose-50 text-rose-900' : 'border-amber-300 bg-amber-50 text-amber-900'}`}><span>{planExpired ? 'مدت پلن شما به پایان رسیده است. برای تمدید با مدیریت نوبت ارتباط بگیرید؛ تنظیمات پلن سفارشی شما محفوظ است.' : planDaysRemaining === 0 ? 'پلن شما امروز به پایان می‌رسد. برای تمدید با مدیریت نوبت ارتباط بگیرید.' : `پلن شما تا ${planDaysRemaining.toLocaleString('fa-AF')} روز دیگر به پایان می‌رسد. برای تمدید با مدیریت نوبت ارتباط بگیرید.`}</span><Link href="/contact" className="shrink-0 rounded-xl border border-current px-4 py-2 text-center text-xs font-bold">تمدید اشتراک</Link></div></div>}
 
       {dataError && <div role="alert" className="mx-auto w-full max-w-7xl px-4 pt-4 sm:px-6 lg:px-8"><div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">{dataError}<button type="button" className="mr-3 font-bold underline" onClick={() => { if (selectedBusiness) void loadBusinessDetails(selectedBusiness.id, selectedDate); }}>تلاش دوباره</button></div></div>}
       {/* Global Notification Toast */}

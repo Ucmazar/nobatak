@@ -11,13 +11,13 @@ export function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2 group">
-          <Image src="/logo-transparent.png" width={184} height={100} sizes="(max-width: 640px) 92px, 184px" alt="نوبتک" className="h-10 w-auto object-contain group-hover:scale-105 transition-transform duration-200" />
+          <Image src="/logo-transparent.png" width={184} height={100} sizes="(max-width: 640px) 92px, 184px" alt="نوبت" className="h-10 w-auto object-contain group-hover:scale-105 transition-transform duration-200" />
         </Link>
 
         {/* Navigation Links */}
         <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-600">
           <Link href="#about" className="hover:text-blue-600 transition-colors">
-            نوبتک چیست؟
+            نوبت چیست؟
           </Link>
           <Link href="#features" className="hover:text-blue-600 transition-colors">
             مزایا و ویژگی‌ها

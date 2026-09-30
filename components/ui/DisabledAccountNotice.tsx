@@ -49,14 +49,14 @@ export function DisabledAccountNotice({ initialAccess, initialBlockingBusinesses
   return <main dir="rtl" className={styles.page}>
     <div aria-hidden="true" className={styles.ambient} />
     <header className={styles.topbar}>
-      <span className={styles.brandMark}><span /> نوبتک، همراه کسب‌وکار شما</span>
+      <span className={styles.brandMark}><span /> نوبت، همراه کسب‌وکار شما</span>
       <Link href="/">صفحهٔ اصلی <ArrowLeft size={16} /></Link>
     </header>
     <section className={styles.card} aria-labelledby="access-title">
       <div className={styles.content}>
         {/* The original PNG brand asset; no replacement or recreation of the logo. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <Image src="/logo-transparent.png" width={184} height={100} sizes="(max-width: 640px) 92px, 184px" alt="نوبتک، سیستم مدیریت نوبت" className={styles.logo} />
+        <Image src="/logo-transparent.png" width={184} height={100} sizes="(max-width: 640px) 92px, 184px" alt="نوبت، سیستم مدیریت نوبت" className={styles.logo} />
         <span className={styles.status}><span />{unavailable ? 'در انتظار اتصال' : 'دسترسی موقتاً غیرفعال است'}</span>
         <h1 id="access-title">{unavailable ? 'اتصال را دوباره بررسی کنیم' : businessDisabled ? 'کسب‌وکار شما غیرفعال است' : 'حساب شما غیرفعال است'}</h1>
         <p role="status" aria-live="polite" className={styles.description}>{unavailable
@@ -92,9 +92,9 @@ export function DisabledAccountNotice({ initialAccess, initialBlockingBusinesses
           <div className={styles.floatingLabel}><span /> در انتظار {unavailable ? 'اتصال' : 'فعال‌سازی'}</div>
         </div>
         <div className={styles.visualText}><span>یک مکث کوتاه</span><h2>به‌زودی، دوباره در کنار شما</h2><p>پس از تأیید دسترسی، مدیریت نوبت‌ها را<br />از همین‌جا ادامه دهید.</p></div>
-        <div className={styles.visualFooter}><span /> NOBATAK <span /></div>
+        <div className={styles.visualFooter}><span /> NOBAT <span /></div>
       </aside>
     </section>
-    <footer className={styles.footer}>نوبتک <span>•</span> مدیریت ساده‌تر، تجربه‌ای بهتر</footer>
+    <footer className={styles.footer}>نوبت <span>•</span> مدیریت ساده‌تر، تجربه‌ای بهتر</footer>
   </main>;
 }

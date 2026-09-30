@@ -1,4 +1,4 @@
-# Telegram setup for Nobatak
+# Telegram setup for Nobat
 
 The code is prepared for `@nobatech_bot`. Adding a bot token alone does not activate delivery.
 

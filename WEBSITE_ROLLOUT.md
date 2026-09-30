@@ -1,6 +1,6 @@
 # Marketing website rollout
 
-- Homepage inspired by the dark product-led composition of hesabpay.af (redirects to hesab.com), with original Nobatak copy and CSS product demo. No third-party assets or tracking were copied.
+- Homepage inspired by the dark product-led composition of hesabpay.af (redirects to hesab.com), with original Nobat copy and CSS product demo. No third-party assets or tracking were copied.
 - Routes: /about /services /pricing /guide /faq /contact /privacy /terms /cookies.
 - Plans in lib/marketing.ts are DISPLAY-ONLY samples. No billing, admin privileges or account limits are changed. Future Fahim admin integration is not enabled.
 - Contact recipient: fahimullahrasty@gmail.com. WhatsApp: +93780340446.
