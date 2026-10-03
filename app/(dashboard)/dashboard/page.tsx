@@ -19,8 +19,8 @@ import { getUserProfile, upsertUserProfile } from '@/lib/services/profile';
 import { getUserBusinesses, createBusiness, updateBusiness, deleteBusiness } from '@/lib/services/businesses';
 import { getBusinessServices, createService, updateService, deleteService } from '@/lib/services/services';
 import { getBusinessStaff, createStaff, updateStaff, deleteStaff } from '@/lib/services/staff';
-import { createWorkShift, deleteWorkShift, getBusinessWorkShifts, updateWorkShift } from '@/lib/services/work-shifts';
-import { formatWorkingHours, getEmployeeEffectiveWorkingHours, getPlanLimits, isTimeWithinWorkingHours, workShiftValidation } from '@/lib/work-shifts';
+import { createWorkShift, deleteWorkShift, getBusinessWorkShifts, getWorkShiftPlanLimits, updateWorkShift } from '@/lib/services/work-shifts';
+import { formatWorkingHours, getEmployeeEffectiveWorkingHours, isTimeWithinWorkingHours, workShiftValidation, type WorkShiftPlanLimits } from '@/lib/work-shifts';
 import { getBusinessAppointments, invalidateAppointmentReads, createAppointment, updateAppointmentStatus, moveAppointmentBack, deleteAppointment } from '@/lib/services/appointments';
 
 import { usePendingActions } from '@/lib/use-pending-actions';
@@ -73,15 +73,30 @@ export default function DashboardPage() {
   // Business State
   const [businesses, setBusinesses] = useState<Business[]>(bootstrap?.businesses || []);
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
+  const [effectivePlan, setEffectivePlan] = useState<{ planCode: string; status: string; expiresAt: string | null; remainingDays: number | null; maxBusinesses: number; advancedScheduling: boolean }>({ planCode: 'free', status: 'active', expiresAt: null, remainingDays: null, maxBusinesses: 1, advancedScheduling: false });
+  const [workShiftLimits, setWorkShiftLimits] = useState<WorkShiftPlanLimits>({ enabled: false, maxShifts: 0 });
 
-  const planDaysRemaining = profile?.plan_code !== 'free' && profile?.plan_expires_on
-    ? Math.round((Date.parse(`${profile.plan_expires_on}T00:00:00Z`) - Date.parse(`${todayStr}T00:00:00Z`)) / 86400000)
-    : null;
-  const planExpired = planDaysRemaining !== null && planDaysRemaining < 0;
-  const businessLimit = planExpired ? 1 : profile?.max_businesses === undefined ? 1 : profile.max_businesses;
+  const planDaysRemaining = effectivePlan.remainingDays;
+  const planExpired = effectivePlan.status === 'expired';
+  const businessLimit = effectivePlan.maxBusinesses;
   const canCreateBusiness = businessLimit === null || businesses.length < businessLimit;
-  const hasAdvancedScheduling = profile?.plan_code !== 'free' && !planExpired;
-  const workShiftLimits = getPlanLimits(profile, todayStr);
+  const hasAdvancedScheduling = effectivePlan.advancedScheduling && !planExpired;
+
+  useEffect(() => {
+    let cancelled = false;
+    const businessId = selectedBusiness?.id;
+    if (!businessId) return;
+    void Promise.all([
+      supabase.rpc('business_effective_plan_limits', { p_business: businessId }),
+      getWorkShiftPlanLimits(businessId),
+    ]).then(([result, shifts]) => {
+      if (cancelled) return; const row = result.data?.[0];
+      if (row) setEffectivePlan({ planCode: row.plan_code, status: row.effective_status, expiresAt: row.expires_at, remainingDays: row.remaining_days, maxBusinesses: row.max_businesses, advancedScheduling: row.advanced_scheduling });
+      else setEffectivePlan({ planCode: 'free', status: 'expired', expiresAt: null, remainingDays: 0, maxBusinesses: 1, advancedScheduling: false });
+      setWorkShiftLimits(shifts);
+    });
+    return () => { cancelled = true; };
+  }, [selectedBusiness?.id]);
 
   // Active Tab
   const [activeTab, setActiveTab] = useState<'queue' | 'services' | 'staff' | 'shifts' | 'settings'>('queue');

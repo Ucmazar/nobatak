@@ -68,6 +68,10 @@ export default function AdminLayout({
           مدیریت پلن‌ها
         </Link>
 
+        <Link href="/admin/subscriptions">
+          اشتراک و پرداخت
+        </Link>
+
         <Link href="/admin/telegram">
           تنظیمات تلگرام
         </Link>
