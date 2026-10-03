@@ -15,6 +15,8 @@ export interface Profile {
   max_services_per_business?: number
   max_staff_per_business?: number
   max_daily_appointments_per_business?: number
+  work_shifts_enabled?: boolean
+  max_work_shifts?: number | null
   id: string
   full_name: string | null
   phone: string | null
@@ -58,12 +60,26 @@ export interface Service {
 
 export interface Staff {
   max_daily_appointments?: number
+  shift_id?: string | null
   id: string
   business_id: string
   name: string
   is_active: boolean
   created_at: string
   updated_at: string
+  shift?: WorkShift | null
+}
+
+export interface WorkShift {
+  id: string
+  business_id: string
+  name: string
+  start_time: string
+  end_time: string
+  is_active: boolean
+  created_at: string
+  updated_at: string
+  staff_count?: number
 }
 
 export type AppointmentStatus = 'waiting' | 'serving' | 'completed' | 'cancelled'
@@ -81,6 +97,7 @@ export interface Appointment {
   estimated_wait_minutes: number
   late_count: number
   appointment_date: string
+  appointment_time?: string | null
   created_at: string
   updated_at: string
   // Optional joined relations for UI rendering
@@ -96,7 +113,8 @@ export interface Database {
       business_plan_daily_limit: { Args: { p_business: string }; Returns: number | null };
       business_plan_daily_quota: { Args: { p_business: string }; Returns: number | null };
       set_user_plan_limits: { Args: { p_user: string; p_businesses: number; p_services: number; p_staff: number; p_daily_appointments: number }; Returns: undefined };
-      set_user_plan: { Args: { p_user: string; p_plan: 'free' | 'growth' | 'custom'; p_businesses: number; p_services: number; p_staff: number; p_daily_appointments: number; p_expires_on: string | null }; Returns: undefined };
+      set_user_plan: { Args: { p_user: string; p_plan: 'free' | 'growth' | 'custom'; p_businesses: number; p_services: number; p_staff: number; p_daily_appointments: number; p_expires_on: string | null; p_work_shifts_enabled: boolean; p_max_work_shifts: number | null }; Returns: undefined };
+      business_work_shift_limits: { Args: { p_business: string }; Returns: Array<{ enabled: boolean; max_shifts: number | null }> };
       set_business_day_with_transfer: { Args: { p_business: string; p_date: string; p_closed: boolean; p_reason: string; p_request: string }; Returns: Json };
       set_business_day_booking: { Args: { p_business: string; p_closed: boolean; p_reason: string; p_cancel_today: boolean; p_request: string }; Returns: Json };
       daily_notice_summary: { Args: { p_business: string }; Returns: Json };
@@ -148,6 +166,17 @@ export interface Database {
           updated_at?: string
         }
         Update: Partial<Omit<Staff, 'id' | 'business_id'>>
+      }
+      work_shifts: {
+        Row: { [K in keyof WorkShift as K extends 'staff_count' ? never : K]: WorkShift[K] }
+        Relationships: []
+        Insert: Omit<WorkShift, 'id' | 'created_at' | 'updated_at' | 'staff_count'> & {
+          id?: string
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: Partial<Omit<WorkShift, 'id' | 'business_id' | 'created_at' | 'updated_at' | 'staff_count'>>
       }
       appointments: {
         Row: { [K in keyof Appointment]: Appointment[K] }

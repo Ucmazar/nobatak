@@ -13,12 +13,14 @@ import { DeviceBookingLimitSetting } from '@/components/ui/DeviceBookingLimitSet
 import { useRouter } from 'next/navigation';
 import type { DashboardAccessReport } from '@/lib/dashboard-access';
 import { supabase } from '@/lib/supabase/client';
-import { Business, Service, Staff, Appointment, AppointmentStatus, Profile } from '@/types/database';
+import { Business, Service, Staff, Appointment, AppointmentStatus, Profile, WorkShift } from '@/types/database';
 import { slugify, isValidUUID } from '@/lib/utils';
 import { getUserProfile, upsertUserProfile } from '@/lib/services/profile';
 import { getUserBusinesses, createBusiness, updateBusiness, deleteBusiness } from '@/lib/services/businesses';
 import { getBusinessServices, createService, updateService, deleteService } from '@/lib/services/services';
 import { getBusinessStaff, createStaff, updateStaff, deleteStaff } from '@/lib/services/staff';
+import { createWorkShift, deleteWorkShift, getBusinessWorkShifts, updateWorkShift } from '@/lib/services/work-shifts';
+import { formatWorkingHours, getEmployeeEffectiveWorkingHours, getPlanLimits, isTimeWithinWorkingHours, workShiftValidation } from '@/lib/work-shifts';
 import { getBusinessAppointments, invalidateAppointmentReads, createAppointment, updateAppointmentStatus, moveAppointmentBack, deleteAppointment } from '@/lib/services/appointments';
 
 import { usePendingActions } from '@/lib/use-pending-actions';
@@ -33,7 +35,7 @@ import { queueAhead } from '@/lib/queue';
 const BusinessQRCode = dynamic(() => import('@/components/ui/BusinessQRCode').then(module => module.BusinessQRCode), { loading: () => <p role="status">در حال آماده‌سازی برگه…</p> });
 import { AfghanDatePicker } from '@/components/ui/AfghanDatePicker';
 import { getUpcomingDaysAfghani, isoToAfghaniDate, getKabulTodayISO } from '@/lib/afghaniMonths';
-import { CalendarDays, Copy, ListOrdered, LogOut, Plus, Scissors, Settings, Users } from 'lucide-react';
+import { CalendarDays, Clock3, Copy, ListOrdered, LogOut, Plus, Scissors, Settings, Users } from 'lucide-react';
 
 const SELECTED_BUSINESS_STORAGE_PREFIX = 'nobatak:selected-business:';
 
@@ -79,9 +81,10 @@ export default function DashboardPage() {
   const businessLimit = planExpired ? 1 : profile?.max_businesses === undefined ? 1 : profile.max_businesses;
   const canCreateBusiness = businessLimit === null || businesses.length < businessLimit;
   const hasAdvancedScheduling = profile?.plan_code !== 'free' && !planExpired;
+  const workShiftLimits = getPlanLimits(profile, todayStr);
 
   // Active Tab
-  const [activeTab, setActiveTab] = useState<'queue' | 'services' | 'staff' | 'settings'>('queue');
+  const [activeTab, setActiveTab] = useState<'queue' | 'services' | 'staff' | 'shifts' | 'settings'>('queue');
   const [holidayPanelOpen, setHolidayPanelOpen] = useState(false);
 
   // Feedback Notification Toast
@@ -114,7 +117,17 @@ export default function DashboardPage() {
   const [editingStaff, setEditingStaff] = useState<Staff | null>(null);
   const [staffName, setStaffName] = useState('');
   const [staffCapacity, setStaffCapacity] = useState('20');
+  const [staffShiftId, setStaffShiftId] = useState('');
   const [staffSaving, setStaffSaving] = useState(false);
+
+  // Work shifts state
+  const [workShifts, setWorkShifts] = useState<WorkShift[]>([]);
+  const [isShiftModalOpen, setIsShiftModalOpen] = useState(false);
+  const [editingShift, setEditingShift] = useState<WorkShift | null>(null);
+  const [shiftName, setShiftName] = useState('');
+  const [shiftStart, setShiftStart] = useState('08:00');
+  const [shiftEnd, setShiftEnd] = useState('17:00');
+  const [shiftActive, setShiftActive] = useState(true);
 
   // Appointments State & Modals
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -125,6 +138,7 @@ export default function DashboardPage() {
   const [custPhone, setCustPhone] = useState('');
   const [selectedServiceId, setSelectedServiceId] = useState('');
   const [selectedStaffId, setSelectedStaffId] = useState('');
+  const [appointmentTime, setAppointmentTime] = useState('09:00');
   const [appointmentSaving, setAppointmentSaving] = useState(false);
   const [movingAppointment, setMovingAppointment] = useState<Appointment | null>(null);
   const [moveSteps, setMoveSteps] = useState('1');
@@ -149,14 +163,16 @@ export default function DashboardPage() {
     if (!isValidUUID(businessId)) return;
     const revision = queueRevision.current;
     try {
-      const [srvData, stData, appData] = await Promise.all([
+      const [srvData, stData, shiftData, appData] = await Promise.all([
         getBusinessServices(businessId, true),
         getBusinessStaff(businessId, true),
+        getBusinessWorkShifts(businessId),
         getBusinessAppointments(businessId, date, true),
       ]);
       if (selectedBusinessRef.current?.id !== businessId || selectedBusinessRef.current?.is_active === false) return;
       setServices(srvData);
       setStaffMembers(stData);
+      setWorkShifts(shiftData);
       setDetailsReady(true);
       if (selectedDateRef.current === date && revision === queueRevision.current) { setAppointments(overlayQueue(appData, queueChanges.current)); setDataError(null); }
     } catch (err) {
@@ -193,8 +209,8 @@ export default function DashboardPage() {
         selectedBusinessRef.current = updated;
         setSelectedBusiness(updated);
         if (active === false) {
-          setServices([]); setStaffMembers([]); setAppointments([]);
-          setIsServiceModalOpen(false); setIsStaffModalOpen(false); setIsAddAppointmentModalOpen(false);
+          setServices([]); setStaffMembers([]); setWorkShifts([]); setAppointments([]);
+          setIsServiceModalOpen(false); setIsStaffModalOpen(false); setIsShiftModalOpen(false); setIsAddAppointmentModalOpen(false);
         } else { void loadBusinessDetails(selected.id, selectedDateRef.current); }
       }
     }
@@ -453,6 +469,7 @@ export default function DashboardPage() {
             setSelectedBusiness(null);
             setServices([]);
             setStaffMembers([]);
+            setWorkShifts([]);
             setAppointments([]);
           }
           setAlertMsg({ type: 'success', text: 'کسب‌وکار با موفقیت حذف شد.' });
@@ -561,7 +578,7 @@ export default function DashboardPage() {
         setStaffSaving(true);
 
         if (editingStaff) {
-          const { staff: updated, error } = await updateStaff(editingStaff.id, { name: staffName, max_daily_appointments: capacity });
+          const { staff: updated, error } = await updateStaff(editingStaff.id, { name: staffName, max_daily_appointments: capacity, ...(workShiftLimits.enabled ? { shift_id: staffShiftId || null } : {}) });
           if (error || !updated) {
             setAlertMsg({ type: 'error', text: error || 'ویرایش کارمند انجام نشد. لطفاً دوباره تلاش کنید.' });
           } else {
@@ -573,6 +590,7 @@ export default function DashboardPage() {
             business_id: selectedBusiness.id,
             name: staffName,
             max_daily_appointments: capacity,
+            shift_id: workShiftLimits.enabled ? staffShiftId || null : null,
             is_active: true,
           });
 
@@ -587,7 +605,7 @@ export default function DashboardPage() {
         setStaffSaving(false);
         setIsStaffModalOpen(false);
         setEditingStaff(null);
-        setStaffName(''); setStaffCapacity('20');
+        setStaffName(''); setStaffCapacity('20'); setStaffShiftId('');
       } catch {
         setAlertMsg({ type: 'error', text: 'عملیات انجام نشد. لطفاً دوباره تلاش کنید.' });
       }
@@ -678,6 +696,44 @@ export default function DashboardPage() {
     });
   };
 
+  const openShiftForm = (shift?: WorkShift) => {
+    if (!workShiftLimits.enabled) { setAlertMsg({ type: 'error', text: 'شیفت کاری در پلن فعلی فعال نیست.' }); return; }
+    setEditingShift(shift || null);
+    setShiftName(shift?.name || '');
+    setShiftStart(shift?.start_time.slice(0, 5) || selectedBusiness?.opening_time?.slice(0, 5) || '08:00');
+    setShiftEnd(shift?.end_time.slice(0, 5) || selectedBusiness?.closing_time?.slice(0, 5) || '17:00');
+    setShiftActive(shift?.is_active ?? true);
+    setIsShiftModalOpen(true);
+  };
+
+  const handleSaveShift = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!selectedBusiness) return;
+    const validation = workShiftValidation(shiftName, shiftStart, shiftEnd);
+    if (validation) { setAlertMsg({ type: 'error', text: validation }); return; }
+    await runAction(editingShift ? `shift:${editingShift.id}` : 'shift-new', async () => {
+      const result = editingShift
+        ? await updateWorkShift(editingShift.id, { name: shiftName.trim(), start_time: shiftStart, end_time: shiftEnd, is_active: shiftActive })
+        : await createWorkShift({ business_id: selectedBusiness.id, name: shiftName.trim(), start_time: shiftStart, end_time: shiftEnd, is_active: shiftActive });
+      if (result.error || !result.shift) { setAlertMsg({ type: 'error', text: result.error || 'ذخیرهٔ شیفت انجام نشد.' }); return; }
+      const [nextShifts, nextStaff] = await Promise.all([getBusinessWorkShifts(selectedBusiness.id), getBusinessStaff(selectedBusiness.id, true)]);
+      setWorkShifts(nextShifts); setStaffMembers(nextStaff); setIsShiftModalOpen(false); setEditingShift(null);
+      setAlertMsg({ type: 'success', text: editingShift ? 'شیفت کاری ویرایش شد.' : 'شیفت کاری ایجاد شد.' });
+    });
+  };
+
+  const handleDeleteShift = async (shift: WorkShift) => {
+    const count = shift.staff_count ?? staffMembers.filter(member => member.shift_id === shift.id).length;
+    if (!confirm(count > 0 ? `این شیفت توسط ${count.toLocaleString('fa-AF')} کارمند استفاده می‌شود. با حذف آن، این کارکنان به ساعت عمومی کسب‌وکار برمی‌گردند. ادامه می‌دهید؟` : 'آیا از حذف این شیفت اطمینان دارید؟')) return;
+    await runAction(`shift:${shift.id}`, async () => {
+      const result = await deleteWorkShift(shift.id);
+      if (!result.success) { setAlertMsg({ type: 'error', text: result.error || 'حذف شیفت انجام نشد.' }); return; }
+      setWorkShifts(previous => previous.filter(item => item.id !== shift.id));
+      setStaffMembers(previous => previous.map(member => member.shift_id === shift.id ? { ...member, shift_id: null, shift: null } : member));
+      setAlertMsg({ type: 'success', text: 'شیفت حذف شد و کارکنان وابسته به ساعت عمومی برگشتند.' });
+    });
+  };
+
   // Download ticket image for walk-in appointment from Owner Dashboard
   const handleOwnerDownloadTicket = (app: Appointment) => {
     return runAction('appointment:' + app.id, async () => {
@@ -721,6 +777,11 @@ export default function DashboardPage() {
         const nextQueueNum = appointments.length > 0 ? Math.max(...appointments.map(a => a.queue_number)) + 1 : 1;
         const selectedSrv = services.find(s => s.id === selectedServiceId) || services[0] || null;
         const selectedSt = staffMembers.find(s => s.id === selectedStaffId) || staffMembers[0] || null;
+        const effectiveHours = getEmployeeEffectiveWorkingHours(selectedSt || { shift_id: null }, selectedBusiness, workShiftLimits);
+        if (!isTimeWithinWorkingHours(appointmentTime, effectiveHours)) {
+          setAlertMsg({ type: 'error', text: `زمان انتخاب‌شده خارج از ${formatWorkingHours(effectiveHours)} است.` });
+          setAppointmentSaving(false); return;
+        }
 
         const waitingCount = appointments.filter(a => a.status === 'waiting').length;
         const avgDuration = selectedSrv ? selectedSrv.duration_minutes : 20;
@@ -736,10 +797,11 @@ export default function DashboardPage() {
           status: 'waiting',
           estimated_wait_minutes: estWait,
           appointment_date: selectedDate,
+          appointment_time: appointmentTime,
         });
 
         if (error || !newApp) {
-          setAlertMsg({ type: 'error', text: `ثبت نوبت انجام نشد: لطفاً دوباره تلاش کنید.` });
+          setAlertMsg({ type: 'error', text: error === 'OUTSIDE_EFFECTIVE_WORKING_HOURS' ? 'زمان نوبت خارج از ساعت کاری مؤثر کارمند است.' : error === 'APPOINTMENT_TIME_REQUIRED' ? 'زمان نوبت را انتخاب کنید.' : 'ثبت نوبت انجام نشد: لطفاً دوباره تلاش کنید.' });
         } else {
           if (selectedBusinessRef.current?.id === newApp.business_id && selectedDateRef.current === newApp.appointment_date) setAppointments(previous => [...previous.filter(a => a.id !== newApp.id), newApp]);
           setIsAddAppointmentModalOpen(false);
@@ -920,6 +982,13 @@ export default function DashboardPage() {
                 <Users size={17} aria-hidden="true" /><span>کارکنان ({detailsReady ? staffMembers.length : '—'})</span>
               </button>
 
+              <button
+                onClick={() => { setHolidayPanelOpen(false); setActiveTab('shifts'); }}
+                className={`px-4 py-2.5 rounded-xl font-bold text-xs transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${activeTab === 'shifts' ? 'workspace-toolbar-active bg-blue-600 text-white shadow-sm shadow-blue-500/20' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}
+              >
+                <Clock3 size={17} aria-hidden="true" /><span>شیفت‌های کاری ({detailsReady ? workShifts.length : '—'})</span>
+              </button>
+
               {hasAdvancedScheduling && <button type="button" aria-expanded={holidayPanelOpen} aria-controls="holiday-settings" onClick={() => { setActiveTab('queue'); setHolidayPanelOpen(value => !value); }} className={`flex cursor-pointer items-center gap-2 whitespace-nowrap rounded-xl border px-4 py-2.5 text-xs font-bold ${holidayPanelOpen ? 'workspace-toolbar-active border-blue-600 bg-blue-600 text-white' : 'border-slate-200 bg-white text-slate-600'}`}><CalendarDays size={17} aria-hidden="true" />تنظیم رخصتی</button>}
 
               <button
@@ -1047,7 +1116,8 @@ export default function DashboardPage() {
                   <Button
                     onClick={() => {
                       if (services.length > 0) setSelectedServiceId(services[0].id);
-                      if (staffMembers.length > 0) setSelectedStaffId(staffMembers[0].id);
+                      if (staffMembers.length > 0) { setSelectedStaffId(staffMembers[0].id); const hours=getEmployeeEffectiveWorkingHours(staffMembers[0],selectedBusiness!,workShiftLimits); if(hours.startTime) setAppointmentTime(hours.startTime); }
+                      else if (selectedBusiness?.opening_time) setAppointmentTime(selectedBusiness.opening_time.slice(0,5));
                       setIsAddAppointmentModalOpen(true);
                     }}
                     className="text-xs shrink-0 font-bold"
@@ -1189,6 +1259,7 @@ export default function DashboardPage() {
                     onClick={() => {
                       setEditingStaff(null);
                       setStaffName('');
+                      setStaffShiftId('');
                       setIsStaffModalOpen(true);
                     }}
                     size="sm"
@@ -1214,6 +1285,7 @@ export default function DashboardPage() {
                           <div>
                             <h4 className="font-bold text-slate-900 text-sm">{st.name}</h4>
                             {hasAdvancedScheduling && <p className="text-xs text-slate-500">ظرفیت روزانه: {st.max_daily_appointments === 0 ? 'نامحدود' : (st.max_daily_appointments ?? 20).toLocaleString('fa-AF')}</p>}
+                            <p className="mt-1 text-xs text-slate-500">{getEmployeeEffectiveWorkingHours(st, selectedBusiness!, workShiftLimits).source === 'shift' ? 'شیفت کاری' : 'ساعت کاری'}: {formatWorkingHours(getEmployeeEffectiveWorkingHours(st, selectedBusiness!, workShiftLimits))}</p>
                             <Badge variant={st.is_active ? 'emerald' : 'slate'} className="mt-1">
                               {st.is_active ? 'فعال' : 'غیرفعال'}
                             </Badge>
@@ -1221,7 +1293,7 @@ export default function DashboardPage() {
                         </div>
 
                         <div className="flex items-center gap-2">
-                          <Button size="sm" variant="outline" disabled={isPending('staff:' + st.id)} onClick={() => { setEditingStaff(st); setStaffName(st.name); setStaffCapacity(String(st.max_daily_appointments ?? 20)); setIsStaffModalOpen(true); }}>ویرایش</Button>
+                          <Button size="sm" variant="outline" disabled={isPending('staff:' + st.id)} onClick={() => { setEditingStaff(st); setStaffName(st.name); setStaffCapacity(String(st.max_daily_appointments ?? 20)); setStaffShiftId(st.shift_id || ''); setIsStaffModalOpen(true); }}>ویرایش</Button>
                           <Button
                             size="sm"
                             variant="outline"
@@ -1241,6 +1313,20 @@ export default function DashboardPage() {
                     ))}
                   </div>
                 )}
+              </div>
+            )}
+
+            {detailsReady && activeTab === 'shifts' && selectedBusiness && (
+              <div className="space-y-5">
+                <Card className="p-5">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div><h2 className="text-lg font-bold">شیفت‌های کاری — {workShiftLimits.maxShifts === null ? `${workShifts.length.toLocaleString('fa-AF')} شیفت فعال` : `${workShifts.length.toLocaleString('fa-AF')} از ${workShiftLimits.maxShifts.toLocaleString('fa-AF')}`}</h2><p className="mt-1 text-xs text-slate-500">شیفت اختیاری است؛ کارمند بدون شیفت از ساعت عمومی کسب‌وکار استفاده می‌کند.</p></div>
+                    <Button size="sm" onClick={() => openShiftForm()} disabled={!workShiftLimits.enabled || (workShiftLimits.maxShifts !== null && workShifts.length >= workShiftLimits.maxShifts)}>افزودن شیفت</Button>
+                  </div>
+                  {!workShiftLimits.enabled && <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">شیفت کاری در پلن رشد فعال است. شیفت‌ها و اتصال‌های قبلی حفظ می‌شوند، اما ساعت عمومی برای نوبت‌های تازه مؤثر است. <Link href="/pricing" className="font-bold underline">مشاهده پلن‌ها</Link></div>}
+                  {workShiftLimits.enabled && workShiftLimits.maxShifts !== null && workShifts.length >= workShiftLimits.maxShifts && <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">{workShifts.length > workShiftLimits.maxShifts ? 'تعداد شیفت‌های فعلی شما بیشتر از حد مجاز پلن است. برای ایجاد شیفت جدید ابتدا تعداد شیفت‌ها را کاهش دهید.' : `حداکثر تعداد شیفت قابل استفاده در پلن فعلی ${workShiftLimits.maxShifts.toLocaleString('fa-AF')} شیفت است.`}</div>}
+                </Card>
+                {workShifts.length === 0 ? <Card className="border-dashed p-10 text-center"><CardTitle className="text-base">هنوز شیفتی تعریف نشده است</CardTitle><CardDescription className="mt-2">همه کارکنان از ساعت عمومی کسب‌وکار استفاده می‌کنند.</CardDescription></Card> : <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{workShifts.map(shift => <Card key={shift.id} className="p-4"><div className="flex items-start justify-between gap-3"><div><h3 className="font-bold">{shift.name}</h3><p className="mt-2 text-sm text-slate-600">{shift.start_time.slice(0,5)} — {shift.end_time.slice(0,5)}{shift.end_time < shift.start_time ? ' (روز بعد)' : ''}</p><p className="mt-2 text-xs text-slate-500">{(shift.staff_count ?? 0).toLocaleString('fa-AF')} کارمند</p><Badge variant={shift.is_active ? 'emerald' : 'slate'} className="mt-2">{shift.is_active ? 'فعال' : 'غیرفعال'}</Badge></div><div className="flex flex-col gap-2"><Button size="sm" variant="outline" disabled={isPending(`shift:${shift.id}`)} onClick={() => openShiftForm(shift)}>ویرایش</Button><button type="button" disabled={isPending(`shift:${shift.id}`)} onClick={() => handleDeleteShift(shift)} className="text-xs font-bold text-rose-600">حذف</button></div></div></Card>)}</div>}
               </div>
             )}
 
@@ -1453,6 +1539,7 @@ export default function DashboardPage() {
               onChange={(e) => setStaffName(e.target.value)}
               required
             />
+            <div className="space-y-1.5"><label className="block text-xs font-semibold text-slate-700">ساعت / شیفت کاری</label><select value={staffShiftId} onChange={event => setStaffShiftId(event.target.value)} disabled={!workShiftLimits.enabled} className="w-full rounded-xl border border-slate-200 bg-white p-3 text-sm disabled:bg-slate-100"><option value="">ساعت عمومی کسب‌وکار — {selectedBusiness?.opening_time?.slice(0,5) || '—'} تا {selectedBusiness?.closing_time?.slice(0,5) || '—'}</option>{workShifts.filter(shift => shift.is_active || shift.id === editingStaff?.shift_id).map(shift => <option key={shift.id} value={shift.id}>{shift.name} — {shift.start_time.slice(0,5)} تا {shift.end_time.slice(0,5)}{!shift.is_active ? ' (غیرفعال)' : ''}</option>)}</select>{!workShiftLimits.enabled && <p className="text-xs text-amber-700">در پلن فعلی ساعت عمومی مؤثر است؛ اتصال قبلی شیفت حذف نمی‌شود.</p>}</div>
 
             <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
               <Button type="button" variant="outline" onClick={() => setIsStaffModalOpen(false)}>
@@ -1464,6 +1551,15 @@ export default function DashboardPage() {
             </div>
           </fieldset>
         </form>
+      </Modal>
+
+      <Modal
+        isOpen={isShiftModalOpen}
+        onClose={() => { if (!isPending(editingShift ? `shift:${editingShift.id}` : 'shift-new')) setIsShiftModalOpen(false); }}
+        title={editingShift ? 'ویرایش شیفت کاری' : 'افزودن شیفت کاری'}
+        description="نام و بازهٔ حضور کارمندان را وارد کنید"
+      >
+        <form onSubmit={handleSaveShift} className="space-y-4"><fieldset disabled={isPending(editingShift ? `shift:${editingShift.id}` : 'shift-new')} className="space-y-4"><Input label="نام شیفت *" value={shiftName} onChange={event => setShiftName(event.target.value)} placeholder="مثلاً شیفت صبح" maxLength={80} required /><div className="grid gap-4 sm:grid-cols-2"><Input type="time" label="ساعت شروع *" value={shiftStart} onChange={event => setShiftStart(event.target.value)} required /><Input type="time" label="ساعت پایان *" value={shiftEnd} onChange={event => setShiftEnd(event.target.value)} required /></div><p className="text-xs text-slate-500">اگر پایان زودتر از شروع باشد، شیفت تا روز بعد ادامه دارد.</p><label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={shiftActive} onChange={event => setShiftActive(event.target.checked)} />شیفت فعال باشد</label><div className="flex justify-end gap-3 border-t border-slate-100 pt-4"><Button type="button" variant="outline" onClick={() => setIsShiftModalOpen(false)}>انصراف</Button><Button type="submit" isLoading={isPending(editingShift ? `shift:${editingShift.id}` : 'shift-new')}>ذخیره شیفت</Button></div></fieldset></form>
       </Modal>
 
       {/* MODAL: Add Walk-in Appointment */}
@@ -1505,6 +1601,7 @@ export default function DashboardPage() {
               onChange={(e) => setCustPhone(e.target.value)}
               className="dir-ltr text-right"
             />
+            <Input type="time" label="زمان نوبت *" value={appointmentTime} onChange={event => setAppointmentTime(event.target.value)} required helperText={selectedBusiness ? formatWorkingHours(getEmployeeEffectiveWorkingHours(staffMembers.find(st => st.id === selectedStaffId) || staffMembers[0] || { shift_id: null }, selectedBusiness, workShiftLimits)) : undefined} />
 
             {services.length > 0 && (
               <div className="space-y-1.5">
@@ -1528,11 +1625,11 @@ export default function DashboardPage() {
                 <label className="block text-xs font-semibold text-slate-700">ارائه‌دهنده خدمت (اختیاری)</label>
                 <select
                   value={selectedStaffId}
-                  onChange={(e) => setSelectedStaffId(e.target.value)}
+                  onChange={(e) => { const id=e.target.value; setSelectedStaffId(id); const member=staffMembers.find(item => item.id===id); if(selectedBusiness){const hours=getEmployeeEffectiveWorkingHours(member || {shift_id:null},selectedBusiness,workShiftLimits); if(hours.startTime) setAppointmentTime(hours.startTime);} }}
                   className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-600 focus:outline-none"
                 >
                   {staffMembers.map(st => (
-                    <option key={st.id} value={st.id}>{st.name}</option>
+                    <option key={st.id} value={st.id}>{st.name} — {formatWorkingHours(getEmployeeEffectiveWorkingHours(st, selectedBusiness!, workShiftLimits))}</option>
                   ))}
                 </select>
               </div>

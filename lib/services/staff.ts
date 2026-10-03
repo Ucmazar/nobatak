@@ -9,7 +9,7 @@ export async function getBusinessStaff(
   try {
     let query = supabase
       .from('staff')
-      .select('*')
+      .select('*, shift:work_shifts(*)')
       .eq('business_id', businessId)
       .order('created_at', { ascending: true });
 
@@ -33,13 +33,13 @@ export async function createStaff(
     const { data, error } = await supabase
       .from('staff')
       .insert(staffData)
-      .select()
+      .select('*, shift:work_shifts(*)')
       .single();
 
     if (error) return { staff: null, error: planErrorMessage(error.message) };
     return { staff: data, error: null };
-  } catch (err: any) {
-    return { staff: null, error: err.message || 'خطا در افزودن کارمند' };
+  } catch (err: unknown) {
+    return { staff: null, error: err instanceof Error ? err.message : 'خطا در افزودن کارمند' };
   }
 }
 
@@ -52,13 +52,13 @@ export async function updateStaff(
       .from('staff')
       .update(staffData)
       .eq('id', id)
-      .select()
+      .select('*, shift:work_shifts(*)')
       .single();
 
     if (error) return { staff: null, error: planErrorMessage(error.message) };
     return { staff: data, error: null };
-  } catch (err: any) {
-    return { staff: null, error: err.message || 'خطا در ویرایش کارمند' };
+  } catch (err: unknown) {
+    return { staff: null, error: err instanceof Error ? err.message : 'خطا در ویرایش کارمند' };
   }
 }
 
@@ -71,7 +71,7 @@ export async function deleteStaff(id: string): Promise<{ success: boolean; error
 
     if (error) return { success: false, error: planErrorMessage(error.message) };
     return { success: true, error: null };
-  } catch (err: any) {
-    return { success: false, error: err.message };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'حذف کارمند انجام نشد.' };
   }
 }

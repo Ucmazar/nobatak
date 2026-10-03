@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase/client';
-import { Appointment, AppointmentStatus } from '@/types/database';
+import { Appointment, AppointmentStatus, Database } from '@/types/database';
 import { getKabulTodayISO } from '@/lib/afghaniMonths';
 import { isValidUUID } from '@/lib/utils';
 
@@ -49,13 +49,14 @@ export async function createAppointment(
     status?: AppointmentStatus;
     estimated_wait_minutes?: number;
     appointment_date?: string;
+    appointment_time?: string | null;
   }
 ): Promise<{ appointment: Appointment | null; error: string | null }> {
   try {
     invalidateAppointmentReads();
     const targetDate = appointmentData.appointment_date || getKabulTodayISO();
 
-    const payload: any = {
+    const payload: Database['public']['Tables']['appointments']['Insert'] = {
       business_id: appointmentData.business_id,
       customer_name: appointmentData.customer_name,
       booking_device_id: appointmentData.booking_device_id || null,
@@ -64,6 +65,7 @@ export async function createAppointment(
       status: appointmentData.status || 'waiting',
       estimated_wait_minutes: appointmentData.estimated_wait_minutes || 0,
       appointment_date: targetDate,
+      appointment_time: appointmentData.appointment_time || null,
     };
 
     if (appointmentData.service_id && isValidUUID(appointmentData.service_id)) {
@@ -85,11 +87,13 @@ export async function createAppointment(
       if (error.message.includes('DAILY_CAPACITY_REACHED')) return { appointment: null, error: 'DAILY_CAPACITY_REACHED' };
       if (error.message.includes('DEVICE_ACTIVE_LIMIT_REACHED')) return { appointment: null, error: 'DEVICE_ACTIVE_LIMIT_REACHED' };
       if (error.message.includes('DUPLICATE_ACTIVE_NAME')) return { appointment: null, error: 'DUPLICATE_ACTIVE_NAME' };
+      if (error.message.includes('APPOINTMENT_TIME_REQUIRED')) return { appointment: null, error: 'APPOINTMENT_TIME_REQUIRED' };
+      if (error.message.includes('OUTSIDE_EFFECTIVE_WORKING_HOURS')) return { appointment: null, error: 'OUTSIDE_EFFECTIVE_WORKING_HOURS' };
       return { appointment: null, error: error.message };
     }
     return { appointment: data as unknown as Appointment, error: null };
-  } catch (err: any) {
-    return { appointment: null, error: err.message || 'خطا در ثبت نوبت در دیتابیس' };
+  } catch (err: unknown) {
+    return { appointment: null, error: err instanceof Error ? err.message : 'خطا در ثبت نوبت در دیتابیس' };
   }
 }
 
@@ -133,7 +137,7 @@ export async function deleteAppointment(id: string): Promise<{ success: boolean;
 
     if (error) return { success: false, error: error.message };
     return { success: true, error: null };
-  } catch (err: any) {
-    return { success: false, error: err.message };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'حذف نوبت انجام نشد.' };
   }
 }

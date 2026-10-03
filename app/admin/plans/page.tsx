@@ -18,6 +18,8 @@ type Account = {
   max_services_per_business?: number;
   max_staff_per_business?: number;
   max_daily_appointments_per_business?: number;
+  work_shifts_enabled?: boolean;
+  max_work_shifts?: number | null;
 };
 
 const defaults: Limits = { businesses: 1, services: 3, staff: 1, daily: 10 };
@@ -33,6 +35,9 @@ function AccountLimits({ account, onSaved }: { account: Account; onSaved: (accou
   const [limits, setLimits] = useState(() => limitsFor(account));
   const [plan, setPlan] = useState<PlanCode>(account.plan_code === 'growth' ? 'growth' : account.plan_code === 'custom' ? 'custom' : 'free');
   const [expiresOn, setExpiresOn] = useState(account.plan_expires_on || nextMonth());
+  const [workShiftsEnabled, setWorkShiftsEnabled] = useState(account.work_shifts_enabled === true);
+  const [unlimitedWorkShifts, setUnlimitedWorkShifts] = useState(account.max_work_shifts === null);
+  const [maxWorkShifts, setMaxWorkShifts] = useState(String(account.max_work_shifts ?? 2));
   const [message, setMessage] = useState('');
   const { runAction, isPending } = usePendingActions();
   const pending = isPending(account.id);
@@ -49,6 +54,9 @@ function AccountLimits({ account, onSaved }: { account: Account; onSaved: (accou
       setMessage('');
       if (plan !== 'free' && (!expiresOn || expiresOn < getKabulTodayISO())) { setMessage('تاریخ پایان پلن باید امروز یا بعد از امروز باشد.'); return; }
       const selectedLimits = plan === 'custom' ? limits : defaults;
+      const selectedShiftEnabled = plan === 'growth' ? true : plan === 'custom' && workShiftsEnabled;
+      const selectedMaxWorkShifts = plan === 'growth' ? 2 : plan === 'custom' && selectedShiftEnabled ? (unlimitedWorkShifts ? null : Number(maxWorkShifts)) : 0;
+      if (selectedShiftEnabled && selectedMaxWorkShifts !== null && (!Number.isSafeInteger(selectedMaxWorkShifts) || selectedMaxWorkShifts < 0 || selectedMaxWorkShifts > 1000000)) { setMessage('حداکثر تعداد شیفت باید عددی بین صفر تا یک میلیون یا نامحدود باشد.'); return; }
       const { error } = await supabase.rpc('set_user_plan', {
         p_user: account.id,
         p_plan: plan,
@@ -57,13 +65,15 @@ function AccountLimits({ account, onSaved }: { account: Account; onSaved: (accou
         p_staff: selectedLimits.staff,
         p_daily_appointments: selectedLimits.daily,
         p_expires_on: plan === 'free' ? null : expiresOn,
+        p_work_shifts_enabled: selectedShiftEnabled,
+        p_max_work_shifts: selectedMaxWorkShifts,
       });
       if (error) {
         setMessage(error.message.includes('PLAN_NOT_AUTHORIZED') ? 'فقط مدیر فعال سیستم می‌تواند این پلن را تغییر دهد.' : error.message.includes('INVALID_PLAN') ? 'پلن یا مقادیر معتبر نیستند.' : 'ذخیره انجام نشد؛ فایل جدید plan_feature_access.sql را در Supabase اجرا کنید.');
         return;
       }
       setLimits(selectedLimits);
-      onSaved({ ...account, plan_code: plan, plan_expires_on: plan === 'free' ? null : expiresOn, max_businesses: selectedLimits.businesses, max_services_per_business: selectedLimits.services, max_staff_per_business: selectedLimits.staff, max_daily_appointments_per_business: selectedLimits.daily });
+      onSaved({ ...account, plan_code: plan, plan_expires_on: plan === 'free' ? null : expiresOn, max_businesses: selectedLimits.businesses, max_services_per_business: selectedLimits.services, max_staff_per_business: selectedLimits.staff, max_daily_appointments_per_business: selectedLimits.daily, work_shifts_enabled: selectedShiftEnabled, max_work_shifts: selectedMaxWorkShifts });
       setMessage(plan === 'growth' ? 'پلن رشد فعال شد.' : plan === 'custom' ? 'پلن سفارشی فعال شد.' : 'پلن آغاز فعال و پلن رشد غیرفعال شد.');
     });
   }
@@ -80,7 +90,7 @@ function AccountLimits({ account, onSaved }: { account: Account; onSaved: (accou
     {plan !== 'free' && <label className="mt-4 block max-w-xs text-xs font-semibold text-slate-700">تاریخ پایان پلن<input aria-label="تاریخ پایان پلن" type="date" min={getKabulTodayISO()} required disabled={pending} value={expiresOn} onChange={event => setExpiresOn(event.target.value)} className="mt-2 block w-full rounded-xl border border-slate-300 bg-white p-3 text-base text-slate-900 disabled:opacity-60" /></label>}
     {plan === 'custom' && <><div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       {fields.map(([key, label]) => <label key={key} className="text-xs font-semibold text-slate-700">{label}<input aria-label={label} type="number" min="0" max="1000000" step="1" required disabled={pending} value={limits[key]} onChange={event => change(key, event.target.value)} className="mt-2 block w-full rounded-xl border border-slate-300 bg-white p-3 text-base text-slate-900 disabled:opacity-60" /></label>)}
-    </div><p className="mt-3 text-xs leading-6 text-slate-500">صفر یعنی ایجاد مورد تازه در همان بخش متوقف شود. موارد موجود خودکار حذف یا غیرفعال نمی‌شوند.</p></>}
+    </div><div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4"><label className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={workShiftsEnabled} onChange={event => setWorkShiftsEnabled(event.target.checked)} />شیفت کاری فعال باشد</label>{workShiftsEnabled && <div className="mt-4 grid gap-3 sm:grid-cols-2"><label className="text-xs font-semibold text-slate-700">حداکثر تعداد شیفت<input aria-label="حداکثر تعداد شیفت کاری" type="number" min="0" max="1000000" step="1" required={!unlimitedWorkShifts} disabled={pending || unlimitedWorkShifts} value={maxWorkShifts} onChange={event => setMaxWorkShifts(event.target.value)} className="mt-2 block w-full rounded-xl border border-slate-300 bg-white p-3 text-base disabled:opacity-60" /></label><label className="flex items-center gap-2 self-end rounded-xl border border-slate-200 bg-white p-3 text-sm font-semibold"><input type="checkbox" checked={unlimitedWorkShifts} onChange={event => setUnlimitedWorkShifts(event.target.checked)} />نامحدود</label></div>}</div><p className="mt-3 text-xs leading-6 text-slate-500">صفر یعنی ایجاد مورد تازه در همان بخش متوقف شود. موارد موجود خودکار حذف یا غیرفعال نمی‌شوند.</p></>}
     {message && <p role="status" className="mt-3 rounded-lg bg-slate-100 p-3 text-sm">{message}</p>}
   </form>;
 }
@@ -98,7 +108,7 @@ export default function PlansPage() {
         if (!user) throw new Error('با حساب فهیم ادمین وارد شوید.');
         const { data: admin, error: authError } = await supabase.from('profiles').select('role,is_active').eq('id', user.id).single();
         if (authError || admin?.role !== 'superadmin' || admin.is_active === false) throw new Error('این بخش فقط برای مدیر فعال سیستم است.');
-        const { data, error } = await supabase.from('profiles').select('id,full_name,plan_code,plan_expires_on,is_active,max_businesses,max_services_per_business,max_staff_per_business,max_daily_appointments_per_business').eq('role', 'user').order('created_at', { ascending: false });
+        const { data, error } = await supabase.from('profiles').select('id,full_name,plan_code,plan_expires_on,is_active,max_businesses,max_services_per_business,max_staff_per_business,max_daily_appointments_per_business,work_shifts_enabled,max_work_shifts').eq('role', 'user').order('created_at', { ascending: false });
         if (error) throw new Error(error.message.includes('max_services_per_business') ? 'ابتدا فایل جدید supabase/free_plan.sql را در دیتابیس اجرا کنید.' : 'دریافت حساب‌ها انجام نشد؛ صفحه را دوباره باز کنید.');
         if (!disposed) { setAccounts(data || []); setReady(true); }
       } catch (error) { if (!disposed) setMessage(error instanceof Error ? error.message : 'ارتباط برقرار نشد.'); }
