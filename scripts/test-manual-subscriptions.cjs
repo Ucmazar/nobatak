@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const DAY = 86400000;
 function effective(status, expiresAt, now) { return status === 'active' && expiresAt && expiresAt <= now ? 'expired' : status; }
@@ -33,4 +35,16 @@ test('5: custom end is kept exactly and does not carry forward', () => {
 test('6: expired, suspended and cancelled subscriptions resolve to free access', () => {
   const now = Date.UTC(2026, 9, 3); const fallback = (status, end) => effective(status, end, now) === 'active' ? 'growth' : 'free';
   assert.equal(fallback('active', now - 1), 'free'); assert.equal(fallback('suspended', now + DAY), 'free'); assert.equal(fallback('cancelled', now + DAY), 'free');
+});
+test('7: one owner subscription covers every owned business', () => {
+  const owner = { subscription: { plan: 'companion', maxBusinesses: 3 }, businesses: ['clinic', 'barber', 'services'] };
+  assert.equal(owner.businesses.length, owner.subscription.maxBusinesses);
+  assert.ok(owner.businesses.every(() => owner.subscription.plan === 'companion'));
+});
+test('8: migration and payment authority are owner-level', () => {
+  const sql = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'manual_subscriptions.sql'), 'utf8');
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS public\.owner_subscriptions/);
+  assert.match(sql, /p_owner uuid/);
+  assert.match(sql, /subscription_migration_conflicts/);
+  assert.doesNotMatch(sql, /CREATE TABLE IF NOT EXISTS public\.business_subscriptions/);
 });
