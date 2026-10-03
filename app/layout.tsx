@@ -15,6 +15,13 @@ export const metadata: Metadata = {
   title: "نوبت | سیستم هوشمند و عمومی نوبت‌دهی آنلاین",
   description: "سیستم عمومی و مدرن نوبت‌دهی آنلاین برای آرایشگاه‌ها، کلینیک‌ها، تعمیرگاه‌ها و کلیه کسب‌وکارها",
   keywords: ["نوبت‌دهی", "نوبت", "رزرو آنلاین", "مدیریت صف", "نوبت آرایشگاه", "نوبت کلینیک"],
+  icons: {
+    icon: [
+      { url: "/favicon-light.svg", type: "image/svg+xml", media: "(prefers-color-scheme: light)" },
+      { url: "/favicon-dark.svg", type: "image/svg+xml", media: "(prefers-color-scheme: dark)" },
+      { url: "/favicon.ico", sizes: "any" },
+    ],
+  },
 };
 
 export default function RootLayout({

@@ -26,3 +26,14 @@ export function isValidUUID(str: string | null | undefined): boolean {
   if (!str) return false;
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 }
+
+export function normalizePhoneDigits(value: string): string {
+  const persian = '۰۱۲۳۴۵۶۷۸۹';
+  const arabic = '٠١٢٣٤٥٦٧٨٩';
+  return value.replace(/[۰-۹]/g, digit => String(persian.indexOf(digit))).replace(/[٠-٩]/g, digit => String(arabic.indexOf(digit))).replace(/[\s()-]/g, '');
+}
+
+export function isValidOptionalAfghanPhone(value: string): boolean {
+  const phone = normalizePhoneDigits(value.trim());
+  return phone === '' || /^(?:\+93|0093|0)?7\d{8}$/.test(phone);
+}

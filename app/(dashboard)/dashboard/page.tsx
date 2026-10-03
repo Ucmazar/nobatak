@@ -14,7 +14,7 @@ import { useRouter } from 'next/navigation';
 import type { DashboardAccessReport } from '@/lib/dashboard-access';
 import { supabase } from '@/lib/supabase/client';
 import { Business, Service, Staff, Appointment, AppointmentStatus, Profile, WorkShift } from '@/types/database';
-import { slugify, isValidUUID } from '@/lib/utils';
+import { slugify, isValidUUID, isValidOptionalAfghanPhone } from '@/lib/utils';
 import { getUserProfile, upsertUserProfile } from '@/lib/services/profile';
 import { getUserBusinesses, createBusiness, updateBusiness, deleteBusiness } from '@/lib/services/businesses';
 import { getBusinessServices, createService, updateService, deleteService } from '@/lib/services/services';
@@ -27,6 +27,7 @@ import { getBusinessAppointments, invalidateAppointmentReads, createAppointment,
 import { usePendingActions } from '@/lib/use-pending-actions';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { AutoDismissAlert } from '@/components/ui/AutoDismissAlert';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
@@ -36,7 +37,7 @@ import { queueAhead } from '@/lib/queue';
 const BusinessQRCode = dynamic(() => import('@/components/ui/BusinessQRCode').then(module => module.BusinessQRCode), { loading: () => <p role="status">در حال آماده‌سازی برگه…</p> });
 import { AfghanDatePicker } from '@/components/ui/AfghanDatePicker';
 import { getUpcomingDaysAfghani, isoToAfghaniDate, getKabulTodayISO } from '@/lib/afghaniMonths';
-import { CalendarDays, Clock3, Copy, ListOrdered, LogOut, Plus, Scissors, Settings, Users } from 'lucide-react';
+import { Building2, CalendarDays, Check, ChevronDown, Clock3, Copy, ListOrdered, LogOut, Plus, Scissors, Settings, UserRound, Users } from 'lucide-react';
 
 const SELECTED_BUSINESS_STORAGE_PREFIX = 'nobatak:selected-business:';
 
@@ -74,14 +75,20 @@ export default function DashboardPage() {
   // Business State
   const [businesses, setBusinesses] = useState<Business[]>(bootstrap?.businesses || []);
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
-  const [effectivePlan, setEffectivePlan] = useState<{ planCode: string; status: string; expiresAt: string | null; remainingDays: number | null; maxBusinesses: number | null; advancedScheduling: boolean }>({ planCode: 'free', status: 'active', expiresAt: null, remainingDays: null, maxBusinesses: 1, advancedScheduling: false });
+  const [effectivePlan, setEffectivePlan] = useState<{ planCode: string; status: string; startedAt: string | null; expiresAt: string | null; remainingDays: number | null; maxBusinesses: number | null; advancedScheduling: boolean }>({ planCode: 'free', status: 'active', startedAt: null, expiresAt: null, remainingDays: null, maxBusinesses: 1, advancedScheduling: false });
   const [workShiftLimits, setWorkShiftLimits] = useState<WorkShiftPlanLimits>({ enabled: false, maxShifts: 0 });
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [businessMenuOpen, setBusinessMenuOpen] = useState(false);
+  const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
+  const accountMenuRef = React.useRef<HTMLDivElement | null>(null);
 
   const planDaysRemaining = effectivePlan.remainingDays;
   const planExpired = effectivePlan.status === 'expired';
   const businessLimit = effectivePlan.maxBusinesses;
   const canCreateBusiness = businessLimit === null || businesses.length < businessLimit;
   const hasAdvancedScheduling = effectivePlan.advancedScheduling && !planExpired;
+  const accountName = profile?.full_name?.trim() || user?.user_metadata?.full_name?.trim() || user?.email?.split('@')[0] || 'حساب من';
+  const planLabel = effectivePlan.planCode === 'growth' ? 'رشد' : effectivePlan.planCode === 'companion' ? 'همراه' : effectivePlan.planCode === 'custom' ? 'سفارشی' : effectivePlan.planCode === 'legacy' ? 'قدیمی' : 'آغاز';
 
   useEffect(() => {
     let cancelled = false;
@@ -92,12 +99,36 @@ export default function DashboardPage() {
       businessId ? getWorkShiftPlanLimits(businessId) : Promise.resolve({ enabled: false, maxShifts: 0 }),
     ]).then(([result, shifts]) => {
       if (cancelled) return; const row = result.limits;
-      if (row) setEffectivePlan({ planCode: row.planCode, status: row.status, expiresAt: row.expiresAt, remainingDays: row.remainingDays, maxBusinesses: row.maxBusinesses, advancedScheduling: row.advancedScheduling });
-      else setEffectivePlan({ planCode: 'free', status: 'expired', expiresAt: null, remainingDays: 0, maxBusinesses: 1, advancedScheduling: false });
+      if (row) setEffectivePlan({ planCode: row.planCode, status: row.status, startedAt: row.startedAt, expiresAt: row.expiresAt, remainingDays: row.remainingDays, maxBusinesses: row.maxBusinesses, advancedScheduling: row.advancedScheduling });
+      else {
+        // Keep the dashboard usable while an older installation is waiting for the
+        // owner-subscription migration: the already-loaded profile is the safest fallback.
+        const expiresAt = profile?.plan_expires_on ? `${profile.plan_expires_on}T23:59:59+04:30` : null;
+        const remainingDays = expiresAt ? Math.max(0, Math.ceil((Date.parse(expiresAt) - Date.now()) / 86_400_000)) : null;
+        const expired = remainingDays === 0 && Boolean(expiresAt);
+        const planCode = expired ? 'free' : profile?.plan_code || 'free';
+        setEffectivePlan({
+          planCode,
+          status: expired ? 'expired' : 'active',
+          startedAt: null,
+          expiresAt,
+          remainingDays,
+          maxBusinesses: expired ? 1 : profile?.max_businesses ?? 1,
+          advancedScheduling: !expired && planCode !== 'free',
+        });
+      }
       setWorkShiftLimits(shifts);
     });
     return () => { cancelled = true; };
-  }, [selectedBusiness?.id, user?.id]);
+  }, [profile?.max_businesses, profile?.plan_code, profile?.plan_expires_on, selectedBusiness?.id, user?.id]);
+
+  useEffect(() => {
+    if (!accountMenuOpen) return;
+    const closeOutside = (event: PointerEvent) => { if (!accountMenuRef.current?.contains(event.target as Node)) { setAccountMenuOpen(false); setBusinessMenuOpen(false); } };
+    const closeEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') { setAccountMenuOpen(false); setBusinessMenuOpen(false); } };
+    document.addEventListener('pointerdown', closeOutside); document.addEventListener('keydown', closeEscape);
+    return () => { document.removeEventListener('pointerdown', closeOutside); document.removeEventListener('keydown', closeEscape); };
+  }, [accountMenuOpen]);
 
   // Active Tab
   const [activeTab, setActiveTab] = useState<'queue' | 'services' | 'staff' | 'shifts' | 'settings'>('queue');
@@ -105,6 +136,7 @@ export default function DashboardPage() {
 
   // Feedback Notification Toast
   const [alertMsg, setAlertMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const dismissAlert = useCallback(() => setAlertMsg(null), []);
 
   // Business Modals & Forms
   const [isBizModalOpen, setIsBizModalOpen] = useState(false);
@@ -152,6 +184,7 @@ export default function DashboardPage() {
   const [isAddAppointmentModalOpen, setIsAddAppointmentModalOpen] = useState(false);
   const [custName, setCustName] = useState('');
   const [custPhone, setCustPhone] = useState('');
+  const [appointmentFieldErrors, setAppointmentFieldErrors] = useState<{ name?: string; phone?: string; time?: string }>({});
   const [selectedServiceId, setSelectedServiceId] = useState('');
   const [selectedStaffId, setSelectedStaffId] = useState('');
   const [appointmentTime, setAppointmentTime] = useState('09:00');
@@ -786,7 +819,12 @@ export default function DashboardPage() {
     e.preventDefault();
     return runAction('appointment-new', async () => {
       try {
-        if (!custName || !selectedBusiness) return;
+        if (!selectedBusiness) return;
+        const errors: typeof appointmentFieldErrors = {};
+        if (!custName.trim()) errors.name = 'نام مشتری را وارد کنید.';
+        if (!isValidOptionalAfghanPhone(custPhone)) errors.phone = 'شماره تماس معتبر نیست؛ نمونه: ۰۷xxxxxxxx یا ‎+93 7xxxxxxxx.';
+        setAppointmentFieldErrors(errors);
+        if (Object.keys(errors).length > 0) return;
 
         setAppointmentSaving(true);
         // Queue number is scoped for the selected date!
@@ -795,7 +833,7 @@ export default function DashboardPage() {
         const selectedSt = staffMembers.find(s => s.id === selectedStaffId) || staffMembers[0] || null;
         const effectiveHours = getEmployeeEffectiveWorkingHours(selectedSt || { shift_id: null }, selectedBusiness, workShiftLimits);
         if (!isTimeWithinWorkingHours(appointmentTime, effectiveHours)) {
-          setAlertMsg({ type: 'error', text: `زمان انتخاب‌شده خارج از ${formatWorkingHours(effectiveHours)} است.` });
+          setAppointmentFieldErrors(previous => ({ ...previous, time: `زمان باید داخل ${formatWorkingHours(effectiveHours)} باشد.` }));
           setAppointmentSaving(false); return;
         }
 
@@ -817,12 +855,14 @@ export default function DashboardPage() {
         });
 
         if (error || !newApp) {
-          setAlertMsg({ type: 'error', text: error === 'OUTSIDE_EFFECTIVE_WORKING_HOURS' ? 'زمان نوبت خارج از ساعت کاری مؤثر کارمند است.' : error === 'APPOINTMENT_TIME_REQUIRED' ? 'زمان نوبت را انتخاب کنید.' : 'ثبت نوبت انجام نشد: لطفاً دوباره تلاش کنید.' });
+          if (error === 'OUTSIDE_EFFECTIVE_WORKING_HOURS' || error === 'APPOINTMENT_TIME_REQUIRED') setAppointmentFieldErrors(previous => ({ ...previous, time: error === 'APPOINTMENT_TIME_REQUIRED' ? 'زمان نوبت را انتخاب کنید.' : 'زمان نوبت خارج از ساعت کاری مؤثر کارمند است.' }));
+          else setAlertMsg({ type: 'error', text: 'ثبت نوبت انجام نشد: لطفاً دوباره تلاش کنید.' });
         } else {
           if (selectedBusinessRef.current?.id === newApp.business_id && selectedDateRef.current === newApp.appointment_date) setAppointments(previous => [...previous.filter(a => a.id !== newApp.id), newApp]);
           setIsAddAppointmentModalOpen(false);
           setCustName('');
           setCustPhone('');
+          setAppointmentFieldErrors({});
           setAlertMsg({ type: 'success', text: `نوبت شماره #${nextQueueNum} برای تاریخ ${isoToAfghaniDate(selectedDate)} با موفقیت ذخیره شد.` });
         }
         setAppointmentSaving(false);
@@ -872,11 +912,18 @@ export default function DashboardPage() {
             <strong className="text-sm sm:text-xl">نوبت - {isoToAfghaniDate(selectedDate)}</strong>
           </Link>
           <div className="workspace-header-actions flex min-w-0 flex-wrap items-center gap-2">
-            {selectedBusiness && <span className="hidden max-w-48 truncate text-xs font-bold text-blue-100 md:block">داشبورد {selectedBusiness.name}</span>}
-            {selectedBusiness && <Badge variant={profile?.plan_code === 'custom' ? 'amber' : profile?.plan_code === 'legacy' ? 'slate' : 'emerald'}>{profile?.plan_code === 'growth' ? 'پلن رشد' : profile?.plan_code === 'custom' ? 'پلن سفارشی' : profile?.plan_code === 'legacy' ? 'تنظیمات قبلی' : 'پلن آغاز'}</Badge>}
-            {businesses.length > 0 && selectedBusiness && <select disabled={pending.size > 0} value={selectedBusiness.id} onChange={(event) => { const business = businesses.find(item => item.id === event.target.value); if (business) void handleSelectBusiness(business); }} className="workspace-business-switcher cursor-pointer rounded-xl border border-white/25 bg-white px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-cyan-300">{businesses.map(business => <option key={business.id} value={business.id}>{business.name}{business.is_active === false ? ' (غیرفعال)' : ''}</option>)}</select>}
-            <Button size="sm" variant="outline" disabled={!canCreateBusiness} onClick={() => setIsBizModalOpen(true)} className="workspace-add-business hidden border-white/30 bg-transparent text-xs text-white hover:bg-white/10 disabled:cursor-not-allowed sm:inline-flex"><Plus size={15} aria-hidden="true" /> کسب‌وکار</Button>
-            <Button variant="outline" size="sm" isLoading={isPending('logout')} onClick={handleLogout} className="border-white/30 bg-transparent text-xs text-white hover:bg-white/10"><LogOut size={15} aria-hidden="true" /> خروج</Button>
+            {selectedBusiness && <span className="max-w-28 truncate text-xs font-bold text-blue-100 sm:max-w-48">داشبورد {selectedBusiness.name}</span>}
+            <div ref={accountMenuRef} className="relative min-w-0">
+              <button type="button" aria-haspopup="menu" aria-expanded={accountMenuOpen} onClick={() => { setAccountMenuOpen(open => !open); setBusinessMenuOpen(false); }} className="flex max-w-48 items-center gap-2 rounded-xl border border-white/25 bg-white/10 px-3 py-2 text-xs font-bold text-white hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300 sm:max-w-64">
+                <UserRound size={16} className="shrink-0" aria-hidden="true" /><span className="truncate">{accountName}</span><ChevronDown size={15} className={`shrink-0 transition-transform ${accountMenuOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
+              </button>
+              {accountMenuOpen && <div role="menu" className="absolute left-0 top-full z-50 mt-2 w-[min(20rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 text-slate-800 shadow-2xl">
+                <button type="button" role="menuitem" aria-expanded={businessMenuOpen} onClick={() => setBusinessMenuOpen(open => !open)} className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-right text-sm font-bold hover:bg-slate-50 focus-visible:outline-2"><span className="flex items-center gap-2"><Building2 size={17} />کسب‌وکارها</span><span aria-hidden="true">‹</span></button>
+                {businessMenuOpen && <div className="mx-1 mb-2 rounded-xl bg-slate-50 p-1" role="group" aria-label="انتخاب کسب‌وکار">{businesses.map(business => <button type="button" key={business.id} disabled={pending.size > 0} onClick={() => { void handleSelectBusiness(business); setAccountMenuOpen(false); setBusinessMenuOpen(false); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-right text-xs hover:bg-white disabled:opacity-50"><Check size={15} className={selectedBusiness?.id === business.id ? 'text-blue-600' : 'invisible'} /><span className="min-w-0 flex-1 truncate">{business.name}</span>{business.is_active === false && <span className="text-[10px] text-amber-700">غیرفعال</span>}</button>)}<div className="my-1 border-t border-slate-200" /><button type="button" disabled={!canCreateBusiness} onClick={() => { setAccountMenuOpen(false); setBusinessMenuOpen(false); setIsBizModalOpen(true); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-right text-xs font-bold text-blue-700 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"><Plus size={15} />ایجاد کسب‌وکار جدید</button></div>}
+                <button type="button" role="menuitem" onClick={() => { setAccountMenuOpen(false); setAccountSettingsOpen(true); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-right text-sm font-bold hover:bg-slate-50 focus-visible:outline-2"><Settings size={17} />تنظیمات حساب</button>
+                <div className="my-1 border-t border-slate-100" /><button type="button" role="menuitem" disabled={isPending('logout')} onClick={() => void handleLogout()} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-right text-sm font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-50"><LogOut size={17} />{isPending('logout') ? 'در حال خروج…' : 'خروج'}</button>
+              </div>}
+            </div>
           </div>
         </div>
       </header>
@@ -887,17 +934,7 @@ export default function DashboardPage() {
       {/* Global Notification Toast */}
       {alertMsg && (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
-          <div
-            className={`p-4 rounded-xl border text-xs font-semibold flex items-center justify-between transition-all ${alertMsg.type === 'error'
-                ? 'bg-rose-50 border-rose-200 text-rose-800'
-                : 'bg-emerald-50 border-emerald-200 text-emerald-800'
-              }`}
-          >
-            <span>{alertMsg.text}</span>
-            <button onClick={() => setAlertMsg(null)} className="text-sm font-bold opacity-60 hover:opacity-100">
-              ✕
-            </button>
-          </div>
+          <AutoDismissAlert key={`${alertMsg.type}-${alertMsg.text}`} message={alertMsg} onDismiss={dismissAlert} />
         </div>
       )}
 
@@ -1074,7 +1111,6 @@ export default function DashboardPage() {
                   </div>
                 </section>
 
-                {pending.size > 0 && <p role="status" className="text-sm text-blue-700">در حال ثبت تغییرات…</p>}
                 {/* Capacity Status Banner */}
 
 
@@ -1569,6 +1605,14 @@ export default function DashboardPage() {
         </form>
       </Modal>
 
+      <Modal isOpen={accountSettingsOpen} onClose={() => setAccountSettingsOpen(false)} title="تنظیمات حساب" description="مشخصات حساب واردشده و وضعیت اشتراک">
+        <div className="space-y-5">
+          <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><h3 className="font-bold text-slate-900">اطلاعات حساب</h3><dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2"><div><dt className="text-xs text-slate-500">نام کاربر</dt><dd className="mt-1 font-bold text-slate-900">{accountName}</dd></div><div><dt className="text-xs text-slate-500">ایمیل ورود</dt><dd dir="ltr" className="mt-1 truncate text-right font-medium text-slate-800">{user?.email || 'ثبت نشده'}</dd></div><div><dt className="text-xs text-slate-500">شماره تماس</dt><dd className="mt-1 font-medium text-slate-800">{profile?.phone || 'ثبت نشده'}</dd></div><div><dt className="text-xs text-slate-500">تعداد کسب‌وکار</dt><dd className="mt-1 font-medium text-slate-800">{businesses.length.toLocaleString('fa-AF')} از {effectivePlan.maxBusinesses === null ? 'نامحدود' : effectivePlan.maxBusinesses.toLocaleString('fa-AF')}</dd></div></dl></section>
+          <section className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4"><h3 className="font-bold text-slate-900">پلن و اشتراک</h3><dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2"><div><dt className="text-xs text-slate-500">پلن فعلی</dt><dd className="mt-1 font-bold text-blue-800">{planLabel}</dd></div><div><dt className="text-xs text-slate-500">وضعیت</dt><dd className="mt-1 font-bold text-slate-800">{effectivePlan.status === 'active' ? 'فعال' : effectivePlan.status === 'expired' ? 'منقضی' : effectivePlan.status === 'suspended' ? 'تعلیق' : 'لغو'}</dd></div>{effectivePlan.startedAt && <div><dt className="text-xs text-slate-500">تاریخ شروع</dt><dd className="mt-1 font-medium text-slate-800">{new Intl.DateTimeFormat('fa-AF', { dateStyle: 'medium', timeZone: 'Asia/Kabul' }).format(new Date(effectivePlan.startedAt))}</dd></div>}{effectivePlan.expiresAt && <div><dt className="text-xs text-slate-500">تاریخ پایان اعتبار</dt><dd className="mt-1 font-medium text-slate-800">{new Intl.DateTimeFormat('fa-AF', { dateStyle: 'medium', timeZone: 'Asia/Kabul' }).format(new Date(effectivePlan.expiresAt))}</dd></div>}</dl></section>
+          <div className="flex justify-end"><Button type="button" variant="outline" onClick={() => setAccountSettingsOpen(false)}>بستن</Button></div>
+        </div>
+      </Modal>
+
       <Modal
         isOpen={isShiftModalOpen}
         onClose={() => { if (!isPending(editingShift ? `shift:${editingShift.id}` : 'shift-new')) setIsShiftModalOpen(false); }}
@@ -1585,28 +1629,14 @@ export default function DashboardPage() {
         title={`ثبت نوبت جدید (حضوری / دستی) - تاریخ ${isoToAfghaniDate(selectedDate)}`}
         description="مشخصات نوبت را برای ذخیره دائم در صف ثبت کنید"
       >
-        {selectedBusiness && (
-          <div className="mb-4 bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-900 flex items-center justify-between">
-            <span>🔗 لینک عمومی صف نوبت‌دهی:</span>
-            <Link
-              href={`/q/${selectedBusiness.slug}`}
-              target="_blank"
-              className="font-bold text-blue-700 hover:underline flex items-center gap-1"
-            >
-              <span>مشاهده صفحه نوبت</span>
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-              </svg>
-            </Link>
-          </div>
-        )}
         <form onSubmit={handleAddAppointment} className="space-y-4">
           <fieldset disabled={isPending('appointment-new')} aria-busy={isPending('appointment-new')} className="space-y-4 min-w-0">
             <Input
               label="نام مشتری *"
               placeholder="مثلاً: محمد حسینی"
               value={custName}
-              onChange={(e) => setCustName(e.target.value)}
+              onChange={(e) => { setCustName(e.target.value); if (e.target.value.trim()) setAppointmentFieldErrors(previous => ({ ...previous, name: undefined })); }}
+              error={appointmentFieldErrors.name}
               required
             />
 
@@ -1614,10 +1644,11 @@ export default function DashboardPage() {
               label="شماره تماس مشتری (اختیاری)"
               placeholder="۰۹۱۲..."
               value={custPhone}
-              onChange={(e) => setCustPhone(e.target.value)}
+              onChange={(e) => { setCustPhone(e.target.value); if (isValidOptionalAfghanPhone(e.target.value)) setAppointmentFieldErrors(previous => ({ ...previous, phone: undefined })); }}
+              error={appointmentFieldErrors.phone}
               className="dir-ltr text-right"
             />
-            <Input type="time" label="زمان نوبت *" value={appointmentTime} onChange={event => setAppointmentTime(event.target.value)} required helperText={selectedBusiness ? formatWorkingHours(getEmployeeEffectiveWorkingHours(staffMembers.find(st => st.id === selectedStaffId) || staffMembers[0] || { shift_id: null }, selectedBusiness, workShiftLimits)) : undefined} />
+            <Input type="time" label="زمان نوبت *" value={appointmentTime} onChange={event => { setAppointmentTime(event.target.value); setAppointmentFieldErrors(previous => ({ ...previous, time: undefined })); }} required error={appointmentFieldErrors.time} helperText={selectedBusiness ? formatWorkingHours(getEmployeeEffectiveWorkingHours(staffMembers.find(st => st.id === selectedStaffId) || staffMembers[0] || { shift_id: null }, selectedBusiness, workShiftLimits)) : undefined} />
 
             {services.length > 0 && (
               <div className="space-y-1.5">
@@ -1655,8 +1686,8 @@ export default function DashboardPage() {
               <Button type="button" variant="outline" onClick={() => setIsAddAppointmentModalOpen(false)}>
                 انصراف
               </Button>
-              <Button type="submit" isLoading={appointmentSaving}>
-                ثبت نوبت برای {isoToAfghaniDate(selectedDate)}
+              <Button type="submit" isLoading={appointmentSaving || isPending('appointment-new')}>
+                {appointmentSaving || isPending('appointment-new') ? 'در حال ثبت نوبت…' : `ثبت نوبت برای ${isoToAfghaniDate(selectedDate)}`}
               </Button>
             </div>
           </fieldset>

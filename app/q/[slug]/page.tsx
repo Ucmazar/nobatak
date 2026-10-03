@@ -21,11 +21,13 @@ import { queueAhead } from '@/lib/queue';
 import { TelegramButton } from '@/components/ui/TelegramButton';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { AutoDismissAlert } from '@/components/ui/AutoDismissAlert';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { AfghanDatePicker } from '@/components/ui/AfghanDatePicker';
 import { getUpcomingDaysAfghani, isoToAfghaniDate, getKabulTodayISO } from '@/lib/afghaniMonths';
 import { getBookingDeviceId, normalizeBookingName } from '@/lib/booking-device';
+import { isValidOptionalAfghanPhone } from '@/lib/utils';
 import { AlertTriangle, CalendarDays, Check, Clock3, Download, MapPin, Phone, Plus, ShieldCheck, Store, Ticket, Users, XCircle } from 'lucide-react';
 
 interface PublicBookingPageProps {
@@ -69,6 +71,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
   const [customerPhone, setCustomerPhone] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{ name?: string; phone?: string; staff?: string }>({});
 
   // Saved My Appointments State (Local Storage Persistence)
   const [myAppointments, setMyAppointments] = useState<Appointment[]>([]);
@@ -76,6 +79,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
   const [showBookingForm, setShowBookingForm] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [actionAlert, setActionAlert] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const dismissActionAlert = useCallback(() => setActionAlert(null), []);
 
   const myAppointmentsRef = useRef<Appointment[]>([]);
   useEffect(() => { myAppointmentsRef.current = myAppointments; }, [myAppointments]);
@@ -300,16 +304,18 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
       queueVersion.current++;
       try {
         if (catalogChecking || dateLoading || queueError || bookingDay?.is_closed) { setFormError(bookingDay?.reason || 'لطفاً تا تأیید وضعیت صف صبر کنید.'); return; }
-        if (!customerName.trim() || !business) {
-          setFormError('لطفاً نام مراجعه‌کننده را وارد کنید.');
-          return;
-        }
+        if (!business) return;
+        const errors: typeof fieldErrors = {};
+        if (!customerName.trim()) errors.name = 'نام مراجعه‌کننده را وارد کنید.';
+        if (!isValidOptionalAfghanPhone(customerPhone)) errors.phone = 'شماره تماس معتبر نیست؛ نمونه: ۰۷xxxxxxxx یا ‎+93 7xxxxxxxx.';
+        if (staffList.length > 0 && !selectedStaffId) errors.staff = 'یک ارائه‌دهنده را انتخاب کنید.';
+        setFieldErrors(errors);
+        if (Object.keys(errors).length > 0) return;
 
         setSubmitting(true);
         setFormError(null);
 
         if (businessCapacityFull) { setSubmitting(false); setFormError('ظرفیت روزانهٔ کسب‌وکار تکمیل شده است؛ روز دیگری انتخاب کنید.'); return; }
-        if (staffList.length > 0 && !selectedStaffId) { setSubmitting(false); setFormError('لطفاً یک کارمند انتخاب کنید.'); return; }
         if (!effectiveHours || !isTimeWithinWorkingHours(appointmentTime, effectiveHours)) { setSubmitting(false); setFormError(effectiveHours ? `زمان انتخاب‌شده خارج از ${formatWorkingHours(effectiveHours)} است.` : 'زمان نوبت معتبر نیست.'); return; }
         const activeMine = myAppointments.filter(item => ['waiting', 'serving'].includes(item.status));
         const deviceLimit = business.max_active_appointments_per_device ?? 3;
@@ -351,6 +357,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
           setShowBookingForm(false);
           setCustomerName('');
           setCustomerPhone('');
+          setFieldErrors({});
           setActionAlert({ type: 'success', text: `نوبت شماره #${newApp.queue_number} برای ${isoToAfghaniDate(selectedDate)} با موفقیت ثبت شد.` });
         }
 
@@ -447,14 +454,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
 
       <main className="max-w-5xl w-full mx-auto px-4 py-6 space-y-6">
         {/* Action Alert */}
-        {actionAlert && (
-          <div className={`p-4 rounded-xl border text-xs font-semibold flex items-center justify-between transition-all ${
-            actionAlert.type === 'error' ? 'bg-rose-50 border-rose-200 text-rose-800' : 'bg-emerald-50 border-emerald-200 text-emerald-800'
-          }`}>
-            <span>{actionAlert.text}</span>
-            <button onClick={() => setActionAlert(null)} className="text-sm font-bold opacity-60 hover:opacity-100">✕</button>
-          </div>
-        )}
+        {actionAlert && <AutoDismissAlert key={`${actionAlert.type}-${actionAlert.text}`} message={actionAlert} onDismiss={dismissActionAlert} />}
 
         {/* DATE SELECTION BAR */}
         <section className="booking-date-card workspace-date-card" aria-label="انتخاب روز نوبت">
@@ -688,18 +688,18 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
                     <label className="block text-xs font-bold text-slate-800">۲. انتخاب ارائه‌دهنده خدمت</label>
                     <select
                       value={selectedStaffId}
-                      onChange={(e) => { const id=e.target.value; setSelectedStaffId(id); const staff=staffList.find(item => item.id===id); const hours=business ? getEmployeeEffectiveWorkingHours(staff || { shift_id: null },business,workShiftLimits) : null; if(hours?.startTime) setAppointmentTime(hours.startTime); }}
-                      className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs text-slate-800 focus:ring-2 focus:ring-blue-100 focus:border-blue-600 focus:outline-none cursor-pointer"
+                      aria-invalid={Boolean(fieldErrors.staff)}
+                      onChange={(e) => { const id=e.target.value; setSelectedStaffId(id); setFieldErrors(previous => ({ ...previous, staff: undefined })); const staff=staffList.find(item => item.id===id); const hours=business ? getEmployeeEffectiveWorkingHours(staff || { shift_id: null },business,workShiftLimits) : null; if(hours?.startTime) setAppointmentTime(hours.startTime); }}
+                      className={`w-full rounded-xl border bg-white p-3 text-xs text-slate-800 focus:outline-none focus:ring-2 ${fieldErrors.staff ? 'border-rose-500 focus:ring-rose-100' : 'border-slate-200 focus:border-blue-600 focus:ring-blue-100'} cursor-pointer`}
                     >
                       <option value="">کارمند مورد نظر را انتخاب کنید</option>
                       {staffList.map(st => (
                         <option key={st.id} value={st.id}>{st.name} — {formatWorkingHours(getEmployeeEffectiveWorkingHours(st, business, workShiftLimits))}</option>
                       ))}
                     </select>
+                    {fieldErrors.staff && <p className="text-xs font-medium text-rose-600">{fieldErrors.staff}</p>}
                   </div>
                 )}
-
-                <Input type="time" label="۳. زمان نوبت *" value={appointmentTime} onChange={event => setAppointmentTime(event.target.value)} required helperText={effectiveHours ? formatWorkingHours(effectiveHours) : 'ابتدا کارمند را انتخاب کنید.'} />
 
                 <div role="status" aria-live="polite" className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-blue-950">
                   {dateLoading ? 'در حال دریافت وضعیت صف…' : <>
@@ -714,14 +714,16 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
                     label="نام مراجعه‌کننده *"
                     placeholder="مثلاً: احمد، علی یا محمد"
                     value={customerName}
-                    onChange={(e) => setCustomerName(e.target.value)}
+                    onChange={(e) => { setCustomerName(e.target.value); if (e.target.value.trim()) setFieldErrors(previous => ({ ...previous, name: undefined })); }}
+                    error={fieldErrors.name}
                     required
                   />
                   <Input
                     label="شماره تلفن همراه (اختیاری)"
                     placeholder="۰۹۱۲..."
                     value={customerPhone}
-                    onChange={(e) => setCustomerPhone(e.target.value)}
+                    onChange={(e) => { setCustomerPhone(e.target.value); if (isValidOptionalAfghanPhone(e.target.value)) setFieldErrors(previous => ({ ...previous, phone: undefined })); }}
+                    error={fieldErrors.phone}
                     className="dir-ltr text-right"
                   />
                 </div>
@@ -735,7 +737,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
                   </div>
                 )}
 
-                <Button type="submit" size="lg" className="w-full mt-3 font-bold text-sm" isLoading={submitting} disabled={capacityFull || (staffList.length > 0 && !selectedStaffId) || catalogChecking || dateLoading || !!queueError || !!bookingDay?.is_closed || pending.size > 0}>
+                <Button type="submit" size="lg" className="w-full mt-3 font-bold text-sm" isLoading={submitting} disabled={capacityFull || catalogChecking || dateLoading || !!queueError || !!bookingDay?.is_closed || pending.size > 0}>
                   {capacityFull
                     ? 'ظرفیت نوبت‌دهی این روز تکمیل است'
                     : `تایید و دریافت شماره نوبت روز ${selectedDayInfo ? selectedDayInfo.dayName : isoToAfghaniDate(selectedDate)}`}
@@ -748,7 +750,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
       </main>
 
       <footer className="mt-auto border-t border-slate-200 py-6 text-center text-xs text-slate-400">
-        قدرت گرفته از سیستم مدیریت نوبت‌دهی آنلاین <strong className="text-slate-600">نوبت</strong>
+        نوبت — محصولی از <a href="https://modiryat.com" target="_blank" rel="noopener noreferrer" className="font-bold text-slate-600 underline-offset-4 hover:underline focus-visible:outline-2">مدیریت</a>
       </footer>
     </div>
   );
