@@ -2,6 +2,7 @@ import 'server-only';
 import { createClient } from '@supabase/supabase-js';
 import { signTicket } from './tickets';
 import { getKabulTodayISO, isoToAfghaniDate } from '@/lib/afghaniMonths';
+import { estimatedWaitMinutes } from '@/lib/queue';
 
 export function botReady() { return !!(process.env.TELEGRAM_BOT_TOKEN && process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.TELEGRAM_WEBHOOK_SECRET); }
 export function database() {
@@ -42,21 +43,15 @@ export async function ticketStatus(id: string) {
   const { data: business, error: bizError } = await db.from('businesses').select('name,slug,is_active').eq('id', appointment.business_id).single();
   if (bizError) throw new Error('Business query failed');
   if (business.is_active === false) return null;
-  const queueQuery = db.from('appointments').select('id,status').eq('business_id', appointment.business_id).eq('appointment_date', appointment.appointment_date).in('status', ['waiting', 'serving']).lt('queue_number', appointment.queue_number);
+  const queueQuery = db.from('appointments').select('id,status,updated_at,appointment_date,staff_id,queue_number,service:services(duration_minutes)').eq('business_id', appointment.business_id).eq('appointment_date', appointment.appointment_date).in('status', ['waiting', 'serving']).lt('queue_number', appointment.queue_number);
   const { data: aheadRows, error: countError } = await (appointment.staff_id ? queueQuery.eq('staff_id', appointment.staff_id) : queueQuery.is('staff_id', null));
   if (countError) throw new Error('Queue query failed');
   const ahead = aheadRows?.length ?? 0;
   const servingAhead = aheadRows?.filter(row => row.status === 'serving').length ?? 0;
   const nextAfterServing = appointment.status === 'waiting' && ahead === 1 && servingAhead === 1;
-  let serviceDuration = 20;
-  if (appointment.service_id) {
-    const { data: service, error: serviceError } = await db.from('services').select('duration_minutes').eq('id', appointment.service_id).maybeSingle();
-    if (serviceError) throw new Error('Service query failed');
-    serviceDuration = service?.duration_minutes || 20;
-  }
-  const estimatedWaitMinutes = ahead * serviceDuration;
-  const estimatedWaitText = formatEstimatedWait(estimatedWaitMinutes);
-  const estimatedAt = new Date(Date.now() + estimatedWaitMinutes * 60000);
+  const waitMinutes = estimatedWaitMinutes((aheadRows ?? []).map(row => ({ ...row, service: Array.isArray(row.service) ? row.service[0] : row.service })), appointment.appointment_date, appointment.staff_id, appointment.queue_number, Date.now());
+  const estimatedWaitText = formatEstimatedWait(waitMinutes);
+  const estimatedAt = new Date(Date.now() + waitMinutes * 60000);
   const estimatedTime = new Intl.DateTimeFormat('fa-AF', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Kabul' }).format(estimatedAt);
   let staffName = 'بدون انتخاب کارمند';
   if (appointment.staff_id) {
@@ -72,7 +67,7 @@ export async function ticketStatus(id: string) {
   const timing = appointment.status === 'waiting'
     ? `\n\n⏱ زمان تقریبی انتظار: ${estimatedWaitText}\n🕒 ساعت تقریبی رسیدن نوبت: ${estimatedTime}`
     : appointment.status === 'serving' ? '\n\n⏱ زمان انتظار: نوبت شما رسیده است.' : '';
-  return { appointment, business, ahead, estimatedTime, estimatedWaitMinutes, estimatedWaitText, text: `${business.name}\nنام مشتری: ${appointment.customer_name}\nشمارهٔ رسید: ${appointment.queue_number.toLocaleString('fa-AF')}\n${weekday}، ${isoToAfghaniDate(appointment.appointment_date)}\nکارمند / استاد: ${staffName}\n${labels[appointment.status] ?? 'وضعیت نوبت تغییر کرده است.'}${timing}`, fingerprint: `${appointment.appointment_date}:${appointment.status}:${appointment.status === 'completed' ? 0 : ahead}:${servingAhead}:${appointment.late_count ?? 0}`, near: appointment.appointment_date === getKabulTodayISO() && (appointment.status === 'serving' || appointment.status === 'waiting') };
+  return { appointment, business, ahead, estimatedTime, estimatedWaitMinutes: waitMinutes, estimatedWaitText, text: `${business.name}\nنام مشتری: ${appointment.customer_name}\nشمارهٔ رسید: ${appointment.queue_number.toLocaleString('fa-AF')}\n${weekday}، ${isoToAfghaniDate(appointment.appointment_date)}\nکارمند / استاد: ${staffName}\n${labels[appointment.status] ?? 'وضعیت نوبت تغییر کرده است.'}${timing}`, fingerprint: `${appointment.appointment_date}:${appointment.status}:${appointment.status === 'completed' ? 0 : ahead}:${servingAhead}:${appointment.late_count ?? 0}`, near: appointment.appointment_date === getKabulTodayISO() && (appointment.status === 'serving' || appointment.status === 'waiting') };
 }
 export async function management(chat: string, origin: string) {
   const { data, error } = await database().from('telegram_subscriptions').select('appointment_id,appointments!inner(status)').eq('chat_id', chat).in('appointments.status', ['waiting', 'serving']).order('created_at', { ascending: false }).limit(10);

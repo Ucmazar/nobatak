@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import React, { useState, useEffect, use, useCallback, useRef } from 'react';
 import { NavigationLink as Link } from '@/components/ui/NavigationLink';
 import { createLiveRefresh } from '@/lib/live-refresh';
@@ -17,7 +18,7 @@ import { getWorkShiftPlanLimits } from '@/lib/services/work-shifts';
 import { formatWorkingHours, getEmployeeEffectiveWorkingHours, type WorkShiftPlanLimits } from '@/lib/work-shifts';
 import { getBusinessAppointments, invalidateAppointmentReads } from '@/lib/services/appointments';
 import { createPublicAppointment as createAppointment, cancelPublicAppointment as deleteAppointment } from '@/lib/services/public-booking';
-import { queueAhead } from '@/lib/queue';
+import { estimatedWaitMinutes, queueAhead } from '@/lib/queue';
 import { TelegramButton } from '@/components/ui/TelegramButton';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -49,6 +50,8 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
   const upcomingDays = getUpcomingDaysAfghani(7);
 
   const [selectedDate, setSelectedDate] = useState<string>(todayStr);
+  const [waitClock, setWaitClock] = useState(() => Date.now());
+  useEffect(() => { const timer = window.setInterval(() => setWaitClock(Date.now()), 60000); return () => window.clearInterval(timer); }, []);
 
   // ─── Page state ───────────────────────────────────────────────────────────
   const [loading, setLoading] = useState(true);         // Initial full-page load ONLY
@@ -255,14 +258,12 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
   const bookingAhead = queueAhead(dateAppointments, selectedDate, selectedStaffId || null);
   const selectedService = services.find(s => s.id === selectedServiceId) || services[0] || null;
   const selectedAppointment = myAppointments.find(a => a.id === activeTicketId && a.appointment_date === selectedDate) || myAppointments.find(a => a.appointment_date === selectedDate) || null;
-  const receiptService = selectedAppointment ? services.find(service => service.id === selectedAppointment.service_id) || selectedAppointment.service : null;
-  const serviceDuration = selectedAppointment && !showBookingForm ? receiptService?.duration_minutes ?? 20 : selectedService?.duration_minutes ?? 20;
   const peopleAheadCount = selectedAppointment
     ? queueAhead(dateAppointments, selectedAppointment.appointment_date, selectedAppointment.staff_id, selectedAppointment.queue_number)
     : 0;
   const estimatedWaitTime = selectedAppointment && !showBookingForm
-    ? peopleAheadCount * serviceDuration
-    : bookingAhead * serviceDuration;
+    ? estimatedWaitMinutes(dateAppointments, selectedAppointment.appointment_date, selectedAppointment.staff_id, selectedAppointment.queue_number, waitClock)
+    : estimatedWaitMinutes(dateAppointments, selectedDate, selectedStaffId || null, Infinity, waitClock);
 
   // ─── LocalStorage helpers ─────────────────────────────────────────────────
   const saveAppointmentToLocalStorage = (bizId: string, newApp: Appointment) => {
@@ -385,7 +386,6 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
     const chosenService = services.find(s => s.id === selectedAppointment.service_id) || selectedAppointment.service || selectedService;
     const chosenStaff = staffList.find(s => s.id === selectedAppointment.staff_id) || selectedAppointment.staff;
     const aheadCount = queueAhead(dateAppointments, selectedAppointment.appointment_date, selectedAppointment.staff_id, selectedAppointment.queue_number);
-    const avgDuration = chosenService ? chosenService.duration_minutes : 20;
     const { downloadTicketImage } = await import('@/lib/ticketImage');
     downloadTicketImage({
       appointment: selectedAppointment,
@@ -393,7 +393,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
       serviceName: chosenService?.name || null,
       staffName: chosenStaff?.name || null,
       peopleAhead: aheadCount,
-      estimatedWaitMinutes: aheadCount * avgDuration,
+      estimatedWaitMinutes: estimatedWaitMinutes(dateAppointments, selectedAppointment.appointment_date, selectedAppointment.staff_id, selectedAppointment.queue_number, waitClock),
     });
   };
 
@@ -424,8 +424,8 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
       <header className="booking-public-header sticky top-0 z-20 text-white">
         <div className="mx-auto flex min-h-20 max-w-5xl items-center justify-between gap-4 px-4 py-4">
           <Link href="/" className="flex min-w-0 items-center gap-3">
-            <span className="booking-header-icon"><CalendarDays size={24} aria-hidden="true" /></span>
-            <span className="min-w-0"><strong className="block truncate text-lg sm:text-2xl">نوبت - در {business.name}</strong>{business.description && <small className="mt-1 block truncate text-[11px] text-blue-100/80 sm:text-xs">{business.description}</small>}</span>
+            <Image src="/nobat-logo.png" width={184} height={100} sizes="(max-width: 640px) 92px, 120px" alt="نوبت" className="h-11 w-auto shrink-0 object-contain sm:h-14" priority />
+            <span className="min-w-0"><strong className="block truncate text-sm sm:text-lg">{business.name}</strong>{business.description && <small className="mt-1 block truncate text-[11px] text-blue-100/80 sm:text-xs">{business.description}</small>}</span>
           </Link>
           <div className="flex items-center gap-2">
             {myAppointments.length > 0 && (
@@ -574,7 +574,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
                   <span className="booking-mini-icon text-blue-600"><Clock3 size={20} aria-hidden="true" /></span>
                   <span className="text-[10px] text-slate-500 block">زمان تقریبی انتظار</span>
                   <span className="text-sm font-extrabold text-slate-800 font-mono mt-1 block">
-                    {peopleAheadCount === 0 ? 'اولین نوبت روز' : `حدود ${(peopleAheadCount * serviceDuration).toLocaleString('fa-AF')} دقیقه`}
+                    {estimatedWaitTime === 0 ? 'بدون انتظار' : `حدود ${estimatedWaitTime.toLocaleString('fa-AF')} دقیقه`}
                   </span>
                 </div>
               </div>

@@ -21,7 +21,7 @@ import { getBusinessServices, createService, updateService, deleteService } from
 import { getBusinessStaff, createStaff, updateStaff, deleteStaff } from '@/lib/services/staff';
 import { createWorkShift, deleteWorkShift, getBusinessWorkShifts, getWorkShiftPlanLimits, updateWorkShift } from '@/lib/services/work-shifts';
 import { getOwnerPlanLimits } from '@/lib/services/subscriptions';
-import { formatWorkingHours, getEmployeeEffectiveWorkingHours, isTimeWithinWorkingHours, workShiftValidation, type WorkShiftPlanLimits } from '@/lib/work-shifts';
+import { formatWorkingHours, getEmployeeEffectiveWorkingHours, workShiftValidation, type WorkShiftPlanLimits } from '@/lib/work-shifts';
 import { getBusinessAppointments, invalidateAppointmentReads, createAppointment, updateAppointmentStatus, moveAppointmentBack, deleteAppointment } from '@/lib/services/appointments';
 
 import { usePendingActions } from '@/lib/use-pending-actions';
@@ -33,7 +33,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { QueueStatus } from '@/components/ui/QueueStatus';
 import { StaffAppointmentTables } from '@/components/ui/StaffAppointmentTables';
-import { queueAhead } from '@/lib/queue';
+import { estimatedWaitMinutes, queueAhead } from '@/lib/queue';
 const BusinessQRCode = dynamic(() => import('@/components/ui/BusinessQRCode').then(module => module.BusinessQRCode), { loading: () => <p role="status">در حال آماده‌سازی برگه…</p> });
 import { AfghanDatePicker } from '@/components/ui/AfghanDatePicker';
 import { getUpcomingDaysAfghani, isoToAfghaniDate, getKabulTodayISO } from '@/lib/afghaniMonths';
@@ -65,6 +65,8 @@ export default function DashboardPage() {
   const upcomingDays = getUpcomingDaysAfghani(7);
 
   const [selectedDate, setSelectedDate] = useState<string>(todayStr);
+  const [waitClock, setWaitClock] = useState(() => Date.now());
+  useEffect(() => { const timer = window.setInterval(() => setWaitClock(Date.now()), 60000); return () => window.clearInterval(timer); }, []);
 
   const [user, setUser] = useState<{ id: string; email?: string; user_metadata?: { full_name?: string } } | null>(bootstrap?.user || null);
   const [profile, setProfile] = useState<Profile | null>(bootstrap?.profile || null);
@@ -184,10 +186,9 @@ export default function DashboardPage() {
   const [isAddAppointmentModalOpen, setIsAddAppointmentModalOpen] = useState(false);
   const [custName, setCustName] = useState('');
   const [custPhone, setCustPhone] = useState('');
-  const [appointmentFieldErrors, setAppointmentFieldErrors] = useState<{ name?: string; phone?: string; time?: string }>({});
+  const [appointmentFieldErrors, setAppointmentFieldErrors] = useState<{ name?: string; phone?: string }>({});
   const [selectedServiceId, setSelectedServiceId] = useState('');
   const [selectedStaffId, setSelectedStaffId] = useState('');
-  const [appointmentTime, setAppointmentTime] = useState('09:00');
   const [appointmentSaving, setAppointmentSaving] = useState(false);
   const [movingAppointment, setMovingAppointment] = useState<Appointment | null>(null);
   const [moveSteps, setMoveSteps] = useState('1');
@@ -791,7 +792,6 @@ export default function DashboardPage() {
         const srv = services.find(s => s.id === app.service_id) || app.service;
         const st = staffMembers.find(s => s.id === app.staff_id) || app.staff;
         const aheadCount = queueAhead(appointments, app.appointment_date, app.staff_id, app.queue_number);
-        const duration = srv ? srv.duration_minutes : 20;
 
         const { downloadTicketImage } = await import('@/lib/ticketImage');
         downloadTicketImage({
@@ -806,7 +806,7 @@ export default function DashboardPage() {
           serviceName: srv?.name || null,
           staffName: st?.name || null,
           peopleAhead: aheadCount,
-          estimatedWaitMinutes: aheadCount * duration,
+          estimatedWaitMinutes: estimatedWaitMinutes(appointments, app.appointment_date, app.staff_id, app.queue_number, waitClock),
         });
       } catch {
         setAlertMsg({ type: 'error', text: 'عملیات انجام نشد. لطفاً دوباره تلاش کنید.' });
@@ -831,15 +831,7 @@ export default function DashboardPage() {
         const nextQueueNum = appointments.length > 0 ? Math.max(...appointments.map(a => a.queue_number)) + 1 : 1;
         const selectedSrv = services.find(s => s.id === selectedServiceId) || services[0] || null;
         const selectedSt = staffMembers.find(s => s.id === selectedStaffId) || staffMembers[0] || null;
-        const effectiveHours = getEmployeeEffectiveWorkingHours(selectedSt || { shift_id: null }, selectedBusiness, workShiftLimits);
-        if (!isTimeWithinWorkingHours(appointmentTime, effectiveHours)) {
-          setAppointmentFieldErrors(previous => ({ ...previous, time: `زمان باید داخل ${formatWorkingHours(effectiveHours)} باشد.` }));
-          setAppointmentSaving(false); return;
-        }
-
-        const waitingCount = appointments.filter(a => a.status === 'waiting').length;
-        const avgDuration = selectedSrv ? selectedSrv.duration_minutes : 20;
-        const estWait = waitingCount * avgDuration;
+        const estWait = estimatedWaitMinutes(appointments, selectedDate, selectedSt?.id || null, nextQueueNum, waitClock);
 
         const { appointment: newApp, error } = await createAppointment({
           business_id: selectedBusiness.id,
@@ -851,12 +843,11 @@ export default function DashboardPage() {
           status: 'waiting',
           estimated_wait_minutes: estWait,
           appointment_date: selectedDate,
-          appointment_time: appointmentTime,
+          appointment_time: null,
         });
 
         if (error || !newApp) {
-          if (error === 'OUTSIDE_EFFECTIVE_WORKING_HOURS' || error === 'APPOINTMENT_TIME_REQUIRED') setAppointmentFieldErrors(previous => ({ ...previous, time: error === 'APPOINTMENT_TIME_REQUIRED' ? 'زمان نوبت را انتخاب کنید.' : 'زمان نوبت خارج از ساعت کاری مؤثر کارمند است.' }));
-          else setAlertMsg({ type: 'error', text: 'ثبت نوبت انجام نشد: لطفاً دوباره تلاش کنید.' });
+          setAlertMsg({ type: 'error', text: 'ثبت نوبت انجام نشد: لطفاً دوباره تلاش کنید.' });
         } else {
           if (selectedBusinessRef.current?.id === newApp.business_id && selectedDateRef.current === newApp.appointment_date) setAppointments(previous => [...previous.filter(a => a.id !== newApp.id), newApp]);
           setIsAddAppointmentModalOpen(false);
@@ -892,8 +883,8 @@ export default function DashboardPage() {
   const currentServingApp = scopedAppointments.find(a => a.status === 'serving');
   const waitingAppointments = scopedAppointments.filter(a => a.status === 'waiting');
   const completedAppointments = scopedAppointments.filter(a => a.status === 'completed');
-  const avgDuration = services.length > 0 ? services[0].duration_minutes : 20;
-  const estWaitNewJoiner = waitingAppointments.length * avgDuration;
+  const queueStaffIds = [...new Set(scopedAppointments.map(appointment => appointment.staff_id || null))];
+  const estWaitNewJoiner = Math.max(0, ...queueStaffIds.map(staffId => estimatedWaitMinutes(scopedAppointments, selectedDate, staffId, Infinity, waitClock)));
 
   const filteredAppointments = scopedAppointments.filter(a => {
     if (appointmentFilter === 'all') return true;
@@ -1168,8 +1159,7 @@ export default function DashboardPage() {
                   <Button
                     onClick={() => {
                       if (services.length > 0) setSelectedServiceId(services[0].id);
-                      if (staffMembers.length > 0) { setSelectedStaffId(staffMembers[0].id); const hours=getEmployeeEffectiveWorkingHours(staffMembers[0],selectedBusiness!,workShiftLimits); if(hours.startTime) setAppointmentTime(hours.startTime); }
-                      else if (selectedBusiness?.opening_time) setAppointmentTime(selectedBusiness.opening_time.slice(0,5));
+                      if (staffMembers.length > 0) setSelectedStaffId(staffMembers[0].id);
                       setIsAddAppointmentModalOpen(true);
                     }}
                     className="text-xs shrink-0 font-bold"
@@ -1626,8 +1616,8 @@ export default function DashboardPage() {
       <Modal
         isOpen={isAddAppointmentModalOpen}
         onClose={() => { if (!(isPending('appointment-new'))) setIsAddAppointmentModalOpen(false); }}
-        title={`ثبت نوبت جدید (حضوری / دستی) - تاریخ ${isoToAfghaniDate(selectedDate)}`}
-        description="مشخصات نوبت را برای ذخیره دائم در صف ثبت کنید"
+        title={`افزودن مشتری به صف - تاریخ ${isoToAfghaniDate(selectedDate)}`}
+        description="مشخصات مشتری را ثبت کنید؛ جایگاه و زمان انتظار از صف محاسبه می‌شود."
       >
         <form onSubmit={handleAddAppointment} className="space-y-4">
           <fieldset disabled={isPending('appointment-new')} aria-busy={isPending('appointment-new')} className="space-y-4 min-w-0">
@@ -1648,8 +1638,6 @@ export default function DashboardPage() {
               error={appointmentFieldErrors.phone}
               className="dir-ltr text-right"
             />
-            <Input type="time" label="زمان نوبت *" value={appointmentTime} onChange={event => { setAppointmentTime(event.target.value); setAppointmentFieldErrors(previous => ({ ...previous, time: undefined })); }} required error={appointmentFieldErrors.time} helperText={selectedBusiness ? formatWorkingHours(getEmployeeEffectiveWorkingHours(staffMembers.find(st => st.id === selectedStaffId) || staffMembers[0] || { shift_id: null }, selectedBusiness, workShiftLimits)) : undefined} />
-
             {services.length > 0 && (
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-slate-700">انتخاب خدمت</label>
@@ -1672,7 +1660,7 @@ export default function DashboardPage() {
                 <label className="block text-xs font-semibold text-slate-700">ارائه‌دهنده خدمت (اختیاری)</label>
                 <select
                   value={selectedStaffId}
-                  onChange={(e) => { const id=e.target.value; setSelectedStaffId(id); const member=staffMembers.find(item => item.id===id); if(selectedBusiness){const hours=getEmployeeEffectiveWorkingHours(member || {shift_id:null},selectedBusiness,workShiftLimits); if(hours.startTime) setAppointmentTime(hours.startTime);} }}
+                  onChange={(e) => setSelectedStaffId(e.target.value)}
                   className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-600 focus:outline-none"
                 >
                   {staffMembers.map(st => (
@@ -1687,7 +1675,7 @@ export default function DashboardPage() {
                 انصراف
               </Button>
               <Button type="submit" isLoading={appointmentSaving || isPending('appointment-new')}>
-                {appointmentSaving || isPending('appointment-new') ? 'در حال ثبت نوبت…' : `ثبت نوبت برای ${isoToAfghaniDate(selectedDate)}`}
+                {appointmentSaving || isPending('appointment-new') ? 'در حال افزودن…' : 'افزودن به صف'}
               </Button>
             </div>
           </fieldset>

@@ -1,4 +1,5 @@
 type QueueEntry = { appointment_date: string; staff_id?: string | null; status: string; queue_number: number };
+type WaitEntry = QueueEntry & { updated_at?: string | null; service?: { duration_minutes?: number | null } | null; service_duration_minutes?: number | null };
 
 /** Active people ahead in one staff member's queue on one day. Null is the general queue. */
 export function queueAhead(entries: QueueEntry[], date: string, staffId?: string | null, before = Infinity): number {
@@ -23,4 +24,20 @@ export function queuePositions<T extends QueueEntry & { id: string }>(entries: T
     }
   }
   return result;
+}
+
+/** Total work remaining before a queue position. The target customer's own service is never included. */
+export function estimatedWaitMinutes(entries: WaitEntry[], date: string, staffId?: string | null, before = Infinity, nowMs = Date.now(), fallbackDuration = 20): number {
+  let total = 0;
+  for (const entry of entries) {
+    if (entry.appointment_date !== date || (entry.staff_id || null) !== (staffId || null) || entry.queue_number >= before || !['waiting', 'serving'].includes(entry.status)) continue;
+    const rawDuration = entry.service?.duration_minutes ?? entry.service_duration_minutes ?? fallbackDuration;
+    const duration = Number.isFinite(rawDuration) && Number(rawDuration) >= 0 ? Number(rawDuration) : fallbackDuration;
+    if (entry.status === 'serving' && entry.updated_at) {
+      const startedAt = Date.parse(entry.updated_at);
+      if (Number.isFinite(startedAt) && startedAt <= nowMs) { total += Math.max(duration - (nowMs - startedAt) / 60000, 0); continue; }
+    }
+    total += duration;
+  }
+  return Math.max(0, Math.ceil(total));
 }

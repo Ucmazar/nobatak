@@ -69,15 +69,17 @@ BEGIN
 
   UPDATE public.appointments current_row
   SET estimated_wait_minutes =
-    coalesce((SELECT s.duration_minutes FROM public.services s WHERE s.id = current_row.service_id), 20)
-    * (
-      SELECT count(*)::integer FROM public.appointments ahead
+    coalesce((
+      SELECT ceil(sum(CASE WHEN ahead.status='serving'
+        THEN greatest(coalesce(s.duration_minutes,20)-extract(epoch FROM(now()-ahead.updated_at))/60.0,0)
+        ELSE coalesce(s.duration_minutes,20) END))::integer FROM public.appointments ahead
+      LEFT JOIN public.services s ON s.id=ahead.service_id
       WHERE ahead.business_id = current_row.business_id
         AND ahead.appointment_date = current_row.appointment_date
         AND ahead.staff_id IS NOT DISTINCT FROM current_row.staff_id
         AND ahead.status IN ('waiting', 'serving')
         AND ahead.queue_number < current_row.queue_number
-    )
+    ),0)
   WHERE current_row.business_id = target.business_id
     AND current_row.appointment_date = target.appointment_date
     AND current_row.staff_id IS NOT DISTINCT FROM target.staff_id
