@@ -14,7 +14,7 @@ import { getBusinessBySlug } from '@/lib/services/businesses';
 import { getBusinessServices } from '@/lib/services/services';
 import { getBusinessStaff } from '@/lib/services/staff';
 import { getWorkShiftPlanLimits } from '@/lib/services/work-shifts';
-import { formatWorkingHours, getEmployeeEffectiveWorkingHours, isTimeWithinWorkingHours, type WorkShiftPlanLimits } from '@/lib/work-shifts';
+import { formatWorkingHours, getEmployeeEffectiveWorkingHours, type WorkShiftPlanLimits } from '@/lib/work-shifts';
 import { getBusinessAppointments, invalidateAppointmentReads } from '@/lib/services/appointments';
 import { createPublicAppointment as createAppointment, cancelPublicAppointment as deleteAppointment } from '@/lib/services/public-booking';
 import { queueAhead } from '@/lib/queue';
@@ -65,7 +65,6 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
   // Booking Form State
   const [selectedServiceId, setSelectedServiceId] = useState<string>('');
   const [selectedStaffId, setSelectedStaffId] = useState<string>('');
-  const [appointmentTime, setAppointmentTime] = useState('09:00');
   const [workShiftLimits, setWorkShiftLimits] = useState<WorkShiftPlanLimits>({ enabled: false, maxShifts: 0 });
   const [customerName, setCustomerName] = useState<string>('');
   const [customerPhone, setCustomerPhone] = useState<string>('');
@@ -156,7 +155,6 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
         if (srvData.length > 0) setSelectedServiceId(srvData[0].id);
         setStaffList(stData);
         setWorkShiftLimits(shiftLimits);
-        setAppointmentTime(bizData.opening_time?.slice(0, 5) || '09:00');
         setAppointments(appData);
 
         // Restore user's saved appointments from localStorage
@@ -212,7 +210,6 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
       const [srv, staff, shiftLimits] = await Promise.all([getBusinessServices(current.id, true), getBusinessStaff(current.id, true), getWorkShiftPlanLimits(current.id)]);
       businessRef.current = current; setBusiness(current); setServices(srv); setStaffList(staff);
       setWorkShiftLimits(shiftLimits);
-      setAppointmentTime(current.opening_time?.slice(0, 5) || '09:00');
       savePublicCatalog(slug, current, srv, staff);
     }, () => document.visibilityState !== 'hidden' && navigator.onLine);
     const channel = supabase.channel('public:rt:' + liveBusinessId)
@@ -257,8 +254,6 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
   const servingAppointment = dateAppointments.find(a => a.status === 'serving');
   const bookingAhead = queueAhead(dateAppointments, selectedDate, selectedStaffId || null);
   const selectedService = services.find(s => s.id === selectedServiceId) || services[0] || null;
-  const selectedStaff = staffList.find(staff => staff.id === selectedStaffId) || null;
-  const effectiveHours = business ? getEmployeeEffectiveWorkingHours(selectedStaff || { shift_id: null }, business, workShiftLimits) : null;
   const selectedAppointment = myAppointments.find(a => a.id === activeTicketId && a.appointment_date === selectedDate) || myAppointments.find(a => a.appointment_date === selectedDate) || null;
   const receiptService = selectedAppointment ? services.find(service => service.id === selectedAppointment.service_id) || selectedAppointment.service : null;
   const serviceDuration = selectedAppointment && !showBookingForm ? receiptService?.duration_minutes ?? 20 : selectedService?.duration_minutes ?? 20;
@@ -268,11 +263,6 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
   const estimatedWaitTime = selectedAppointment && !showBookingForm
     ? peopleAheadCount * serviceDuration
     : bookingAhead * serviceDuration;
-  const selectedAppointmentTime = selectedAppointment?.appointment_time
-    ? selectedAppointment.appointment_time.slice(0, 5)
-    : selectedAppointment?.created_at
-    ? new Intl.DateTimeFormat('fa-AF', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Kabul' }).format(new Date(selectedAppointment.created_at))
-    : '—';
 
   // ─── LocalStorage helpers ─────────────────────────────────────────────────
   const saveAppointmentToLocalStorage = (bizId: string, newApp: Appointment) => {
@@ -316,7 +306,6 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
         setFormError(null);
 
         if (businessCapacityFull) { setSubmitting(false); setFormError('ظرفیت روزانهٔ کسب‌وکار تکمیل شده است؛ روز دیگری انتخاب کنید.'); return; }
-        if (!effectiveHours || !isTimeWithinWorkingHours(appointmentTime, effectiveHours)) { setSubmitting(false); setFormError(effectiveHours ? `زمان انتخاب‌شده خارج از ${formatWorkingHours(effectiveHours)} است.` : 'زمان نوبت معتبر نیست.'); return; }
         const activeMine = myAppointments.filter(item => ['waiting', 'serving'].includes(item.status));
         const deviceLimit = business.max_active_appointments_per_device ?? 3;
         if (business.max_active_appointments_per_device !== null && activeMine.length >= deviceLimit) { setSubmitting(false); setFormError(`شما ${deviceLimit.toLocaleString('fa-AF')} نوبت فعال دارید. برای گرفتن نوبت جدید، یکی از نوبت‌های قبلی باید تکمیل یا لغو شود.`); return; }
@@ -345,11 +334,11 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
           status: 'waiting',
           estimated_wait_minutes: estimatedWaitTime,
           appointment_date: selectedDate,
-          appointment_time: appointmentTime,
+          appointment_time: null,
         });
 
         if (error || !newApp) {
-          setFormError(error === 'BOOKING_CLOSED' ? 'پذیرش نوبت برای این روز بسته شده است.' : error === 'OUTSIDE_EFFECTIVE_WORKING_HOURS' ? 'زمان نوبت خارج از ساعت کاری این کارمند است.' : error === 'APPOINTMENT_TIME_REQUIRED' ? 'زمان نوبت را انتخاب کنید.' : error === 'DEVICE_ACTIVE_LIMIT_REACHED' ? `شما ${(business.max_active_appointments_per_device ?? 3).toLocaleString('fa-AF')} نوبت فعال دارید. برای گرفتن نوبت جدید، یکی از نوبت‌های قبلی باید تکمیل یا لغو شود.` : error === 'DUPLICATE_ACTIVE_NAME' ? 'برای این مراجعه‌کننده نزد همین کارمند یک نوبت فعال وجود دارد.' : (error === 'BUSINESS_DAILY_CAPACITY_REACHED' || error?.startsWith('ظرفیت روزانهٔ پلن')) ? 'ظرفیت روزانهٔ پلن کسب‌وکار تکمیل شده است؛ روز دیگری انتخاب کنید.' : error === 'DAILY_CAPACITY_REACHED' ? 'ظرفیت این کارمند در این روز تکمیل شده است؛ کارمند یا روز دیگری انتخاب کنید.' : 'ثبت نوبت انجام نشد. لطفاً دوباره تلاش کنید.');
+          setFormError(error === 'BOOKING_CLOSED' ? 'پذیرش نوبت برای این روز بسته شده است.' : error === 'DEVICE_ACTIVE_LIMIT_REACHED' ? `شما ${(business.max_active_appointments_per_device ?? 3).toLocaleString('fa-AF')} نوبت فعال دارید. برای گرفتن نوبت جدید، یکی از نوبت‌های قبلی باید تکمیل یا لغو شود.` : error === 'DUPLICATE_ACTIVE_NAME' ? 'برای این مراجعه‌کننده نزد همین کارمند یک نوبت فعال وجود دارد.' : (error === 'BUSINESS_DAILY_CAPACITY_REACHED' || error?.startsWith('ظرفیت روزانهٔ پلن')) ? 'ظرفیت روزانهٔ پلن کسب‌وکار تکمیل شده است؛ روز دیگری انتخاب کنید.' : error === 'DAILY_CAPACITY_REACHED' ? 'ظرفیت این کارمند در این روز تکمیل شده است؛ کارمند یا روز دیگری انتخاب کنید.' : 'ثبت نوبت انجام نشد. لطفاً دوباره تلاش کنید.');
         } else {
           saveAppointmentToLocalStorage(business.id, newApp);
           // Optimistic update — Real-Time will also fire but we update instantly
@@ -562,10 +551,8 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
             </CardHeader>
 
             <CardContent className="space-y-5 pt-0">
-              <div className="booking-ticket" aria-label={`شماره نوبت ${selectedAppointment.queue_number}، زمان نوبت ${selectedAppointmentTime}`}>
+              <div className="booking-ticket" aria-label={`شماره نوبت ${selectedAppointment.queue_number}`}>
                 <div className="booking-ticket-value booking-ticket-number"><span>شماره نوبت:</span><strong>{selectedAppointment.queue_number.toLocaleString('fa-AF')}</strong></div>
-                <div aria-hidden="true" />
-                <div className="booking-ticket-value booking-ticket-time"><span>زمان نوبت:</span><strong>{selectedAppointmentTime}</strong></div>
               </div>
 
               {(selectedAppointment.service || selectedAppointment.staff) && <div className="flex flex-wrap justify-center gap-2 text-xs font-semibold text-slate-600">{selectedAppointment.service && <span className="rounded-full bg-blue-50 px-3 py-1.5 text-blue-700">خدمت: {selectedAppointment.service.name}</span>}{selectedAppointment.staff && <span className="rounded-full bg-slate-100 px-3 py-1.5">ارائه‌دهنده: {selectedAppointment.staff.name}</span>}</div>}
@@ -689,7 +676,7 @@ export default function PublicBookingPage({ params }: PublicBookingPageProps) {
                     <select
                       value={selectedStaffId}
                       aria-invalid={Boolean(fieldErrors.staff)}
-                      onChange={(e) => { const id=e.target.value; setSelectedStaffId(id); setFieldErrors(previous => ({ ...previous, staff: undefined })); const staff=staffList.find(item => item.id===id); const hours=business ? getEmployeeEffectiveWorkingHours(staff || { shift_id: null },business,workShiftLimits) : null; if(hours?.startTime) setAppointmentTime(hours.startTime); }}
+                      onChange={(e) => { setSelectedStaffId(e.target.value); setFieldErrors(previous => ({ ...previous, staff: undefined })); }}
                       className={`w-full rounded-xl border bg-white p-3 text-xs text-slate-800 focus:outline-none focus:ring-2 ${fieldErrors.staff ? 'border-rose-500 focus:ring-rose-100' : 'border-slate-200 focus:border-blue-600 focus:ring-blue-100'} cursor-pointer`}
                     >
                       <option value="">کارمند مورد نظر را انتخاب کنید</option>

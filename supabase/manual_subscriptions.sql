@@ -6,11 +6,11 @@ CREATE TABLE IF NOT EXISTS public.subscription_plan_catalog(
  currency text NOT NULL DEFAULT 'AFN' CHECK(currency~'^[A-Z]{3}$'),duration_months integer CHECK(duration_months IS NULL OR duration_months BETWEEN 1 AND 120),
  limits jsonb NOT NULL DEFAULT '{}'::jsonb CHECK(jsonb_typeof(limits)='object'),is_active boolean NOT NULL DEFAULT true,created_at timestamptz NOT NULL DEFAULT now(),updated_at timestamptz NOT NULL DEFAULT now());
 INSERT INTO public.subscription_plan_catalog(code,name,default_amount,currency,duration_months,limits) VALUES
- ('free','آغاز (رایگان)',0,'AFN',NULL,'{"max_businesses":1,"max_services":3,"max_staff":1,"max_daily_appointments":10,"advanced_scheduling":false,"work_shifts_enabled":false,"max_work_shifts":0}'),
- ('growth','رشد',490,'AFN',1,'{"max_businesses":1,"max_services":20,"max_staff":10,"max_daily_appointments":100,"advanced_scheduling":true,"work_shifts_enabled":true,"max_work_shifts":2}'),
- ('companion','همراه',NULL,'AFN',1,'{"max_businesses":3,"max_services":20,"max_staff":10,"max_daily_appointments":100,"advanced_scheduling":true,"work_shifts_enabled":true,"max_work_shifts":2}'),
- ('custom','اختصاصی',NULL,'AFN',NULL,'{}')
-ON CONFLICT(code) DO UPDATE SET name=excluded.name,limits=excluded.limits,updated_at=now();
+ ('free','آغاز (رایگان)',0,'AFN',NULL,'{"max_businesses":1,"max_services":3,"max_staff":1,"max_daily_appointments":10,"advanced_scheduling":false,"work_shifts_enabled":false,"max_work_shifts":0,"telegram_notifications":false}'),
+ ('growth','رشد',490,'AFN',1,'{"max_businesses":1,"max_services":20,"max_staff":10,"max_daily_appointments":100,"advanced_scheduling":true,"work_shifts_enabled":true,"max_work_shifts":2,"telegram_notifications":true}'),
+ ('companion','همراه',NULL,'AFN',1,'{"max_businesses":3,"max_services":20,"max_staff":10,"max_daily_appointments":100,"advanced_scheduling":true,"work_shifts_enabled":true,"max_work_shifts":2,"telegram_notifications":true}'),
+ ('custom','اختصاصی',NULL,'AFN',NULL,'{"telegram_notifications":true}')
+ON CONFLICT(code) DO UPDATE SET name=excluded.name;
 
 CREATE TABLE IF NOT EXISTS public.owner_subscriptions(
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),owner_id uuid NOT NULL UNIQUE REFERENCES public.profiles(id) ON DELETE CASCADE,plan_code text NOT NULL REFERENCES public.subscription_plan_catalog(code),
@@ -80,6 +80,7 @@ ALTER TABLE public.subscription_plan_catalog ENABLE ROW LEVEL SECURITY;ALTER TAB
 DROP POLICY IF EXISTS plan_catalog_read ON public.subscription_plan_catalog;CREATE POLICY plan_catalog_read ON public.subscription_plan_catalog FOR SELECT TO authenticated USING(is_active OR public.suspension_is_admin());
 DROP POLICY IF EXISTS plan_catalog_admin_write ON public.subscription_plan_catalog;CREATE POLICY plan_catalog_admin_write ON public.subscription_plan_catalog FOR ALL TO authenticated USING(public.suspension_is_admin()) WITH CHECK(public.suspension_is_admin());
 DROP POLICY IF EXISTS owner_subscriptions_admin_only ON public.owner_subscriptions;CREATE POLICY owner_subscriptions_admin_only ON public.owner_subscriptions FOR ALL TO authenticated USING(public.suspension_is_admin()) WITH CHECK(public.suspension_is_admin());
+DROP POLICY IF EXISTS owner_subscriptions_owner_read ON public.owner_subscriptions;CREATE POLICY owner_subscriptions_owner_read ON public.owner_subscriptions FOR SELECT TO authenticated USING(owner_id=auth.uid() OR public.suspension_is_admin());
 DROP POLICY IF EXISTS payments_admin_only ON public.subscription_payments;CREATE POLICY payments_admin_only ON public.subscription_payments FOR ALL TO authenticated USING(public.suspension_is_admin()) WITH CHECK(public.suspension_is_admin());
 DROP POLICY IF EXISTS subscription_audit_admin_only ON public.subscription_audit_logs;CREATE POLICY subscription_audit_admin_only ON public.subscription_audit_logs FOR ALL TO authenticated USING(public.suspension_is_admin()) WITH CHECK(public.suspension_is_admin());
 DROP POLICY IF EXISTS migration_conflicts_admin_only ON public.subscription_migration_conflicts;CREATE POLICY migration_conflicts_admin_only ON public.subscription_migration_conflicts FOR ALL TO authenticated USING(public.suspension_is_admin()) WITH CHECK(public.suspension_is_admin());
@@ -138,6 +139,23 @@ CREATE OR REPLACE FUNCTION public.business_plan_daily_quota(p_business uuid)RETU
 CREATE OR REPLACE FUNCTION public.business_work_shift_limits(p_business uuid)RETURNS TABLE(enabled boolean,max_shifts integer)LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public AS $$SELECT work_shifts_enabled,max_work_shifts FROM public.business_effective_plan_limits(p_business)$$;
 CREATE OR REPLACE FUNCTION public.enforce_business_limit()RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$DECLARE lim record;n integer;owner_active boolean;BEGIN IF TG_OP='UPDATE' AND NEW.owner_id IS NOT DISTINCT FROM OLD.owner_id THEN RETURN NEW;END IF;SELECT is_active INTO owner_active FROM public.profiles WHERE id=NEW.owner_id FOR UPDATE;IF NOT FOUND THEN RAISE EXCEPTION 'Business owner does not exist' USING ERRCODE='23503';END IF;IF owner_active=false AND NOT public.suspension_is_admin()THEN RAISE EXCEPTION 'ACCOUNT_DISABLED' USING ERRCODE='42501';END IF;SELECT * INTO lim FROM public.owner_effective_plan_limits(NEW.owner_id);IF lim.max_businesses IS NULL THEN RETURN NEW;END IF;SELECT count(*)INTO n FROM public.businesses WHERE owner_id=NEW.owner_id;IF n>=lim.max_businesses THEN RAISE EXCEPTION 'BUSINESS_LIMIT_REACHED: %',lim.max_businesses;END IF;RETURN NEW;END$$;
 CREATE OR REPLACE FUNCTION public.enforce_free_resources()RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$DECLARE n integer;cap integer;lim record;BEGIN IF NOT NEW.is_active THEN RETURN NEW;END IF;IF TG_OP='UPDATE' AND OLD.is_active AND OLD.business_id=NEW.business_id THEN RETURN NEW;END IF;PERFORM 1 FROM public.businesses WHERE id=NEW.business_id FOR UPDATE;SELECT * INTO lim FROM public.business_effective_plan_limits(NEW.business_id);cap:=CASE WHEN TG_TABLE_NAME='services'THEN lim.max_services ELSE lim.max_staff END;IF TG_TABLE_NAME='services'THEN SELECT count(*)INTO n FROM public.services WHERE business_id=NEW.business_id AND is_active AND id<>NEW.id;ELSE SELECT count(*)INTO n FROM public.staff WHERE business_id=NEW.business_id AND is_active AND id<>NEW.id;END IF;IF n>=cap THEN RAISE EXCEPTION 'PLAN_RESOURCE_LIMIT:%',TG_TABLE_NAME;END IF;RETURN NEW;END$$;
+
+-- Public booking is queue-based. A fixed appointment time is optional and is
+-- validated only when an internal/manual appointment explicitly supplies one.
+CREATE OR REPLACE FUNCTION public.enforce_effective_working_hours()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+DECLARE hours record;
+BEGIN
+ IF NEW.status NOT IN('waiting','serving') OR NEW.appointment_time IS NULL THEN RETURN NEW;END IF;
+ IF TG_OP='UPDATE' AND NEW.business_id IS NOT DISTINCT FROM OLD.business_id AND NEW.staff_id IS NOT DISTINCT FROM OLD.staff_id AND NEW.appointment_date IS NOT DISTINCT FROM OLD.appointment_date AND NEW.appointment_time IS NOT DISTINCT FROM OLD.appointment_time THEN RETURN NEW;END IF;
+ IF NEW.staff_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM public.staff s WHERE s.id=NEW.staff_id AND s.business_id=NEW.business_id AND s.is_active)THEN RAISE EXCEPTION 'INVALID_STAFF';END IF;
+ SELECT * INTO hours FROM public.get_employee_effective_working_hours(NEW.staff_id,NEW.business_id);
+ IF hours.start_time IS NULL OR hours.end_time IS NULL THEN RETURN NEW;END IF;
+ IF hours.start_time<hours.end_time THEN IF NEW.appointment_time<hours.start_time OR NEW.appointment_time>=hours.end_time THEN RAISE EXCEPTION 'OUTSIDE_EFFECTIVE_WORKING_HOURS';END IF;
+ ELSIF NEW.appointment_time<hours.start_time AND NEW.appointment_time>=hours.end_time THEN RAISE EXCEPTION 'OUTSIDE_EFFECTIVE_WORKING_HOURS';END IF;
+ RETURN NEW;
+END$$;
+REVOKE ALL ON FUNCTION public.enforce_effective_working_hours()FROM PUBLIC,anon,authenticated;
 
 REVOKE ALL ON FUNCTION public.record_manual_subscription_payment(uuid,text,numeric,text,text,text,text,timestamptz,timestamptz,integer,timestamptz,text,text,jsonb)FROM PUBLIC,anon;REVOKE ALL ON FUNCTION public.set_owner_subscription_status(uuid,text,text)FROM PUBLIC,anon;REVOKE ALL ON FUNCTION public.update_manual_payment(uuid,text,text,text,text,text)FROM PUBLIC,anon;REVOKE ALL ON FUNCTION public.sync_expired_owner_subscriptions()FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public.record_manual_subscription_payment(uuid,text,numeric,text,text,text,text,timestamptz,timestamptz,integer,timestamptz,text,text,jsonb)TO authenticated;GRANT EXECUTE ON FUNCTION public.set_owner_subscription_status(uuid,text,text)TO authenticated;GRANT EXECUTE ON FUNCTION public.update_manual_payment(uuid,text,text,text,text,text)TO authenticated;GRANT EXECUTE ON FUNCTION public.owner_effective_plan_limits(uuid)TO authenticated,service_role;GRANT EXECUTE ON FUNCTION public.business_effective_plan_limits(uuid)TO authenticated,service_role;GRANT EXECUTE ON FUNCTION public.can_create_business(uuid)TO authenticated,service_role;GRANT EXECUTE ON FUNCTION public.business_work_shift_limits(uuid)TO anon,authenticated,service_role;GRANT EXECUTE ON FUNCTION public.sync_expired_owner_subscriptions()TO service_role;

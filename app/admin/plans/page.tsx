@@ -1,128 +1,43 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase/client';
-import { usePendingActions } from '@/lib/use-pending-actions';
+import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
-import { getKabulTodayISO, isoToAfghaniDate } from '@/lib/afghaniMonths';
+import { Input } from '@/components/ui/Input';
+import type { SubscriptionPlan } from '@/types/database';
 
-type Limits = { businesses: number; services: number; staff: number; daily: number };
 type PlanCode = 'free' | 'growth' | 'custom';
-type Account = {
-  id: string;
-  full_name: string | null;
-  plan_code?: PlanCode | 'legacy';
-  plan_expires_on?: string | null;
-  is_active?: boolean;
-  max_businesses?: number | null;
-  max_services_per_business?: number;
-  max_staff_per_business?: number;
-  max_daily_appointments_per_business?: number;
-  work_shifts_enabled?: boolean;
-  max_work_shifts?: number | null;
+type Limits = { max_businesses: number | null; max_services: number; max_staff: number; max_daily_appointments: number; advanced_scheduling: boolean; work_shifts_enabled: boolean; max_work_shifts: number; telegram_notifications: boolean };
+type Payload = { plans: SubscriptionPlan[]; setupRequired?: boolean };
+const labels: Record<PlanCode, { title: string; description: string }> = {
+  free: { title: 'آغاز', description: 'قالب پایه و رایگان برای شروع کسب‌وکار.' },
+  growth: { title: 'رشد', description: 'قالب رشد؛ محدودیت شیفت برای هر کسب‌وکار جداگانه محاسبه می‌شود.' },
+  custom: { title: 'سفارشی', description: 'این‌ها فقط مقدارهای اولیه‌اند؛ تنظیمات نهایی هنگام اعمال روی هر صاحب حساب در «اشتراک و پرداخت» تعیین می‌شود.' },
+};
+const defaults: Record<PlanCode, Limits> = {
+  free: { max_businesses: 1, max_services: 3, max_staff: 1, max_daily_appointments: 10, advanced_scheduling: false, work_shifts_enabled: false, max_work_shifts: 0, telegram_notifications: false },
+  growth: { max_businesses: 1, max_services: 20, max_staff: 10, max_daily_appointments: 100, advanced_scheduling: true, work_shifts_enabled: true, max_work_shifts: 2, telegram_notifications: true },
+  custom: { max_businesses: 1, max_services: 3, max_staff: 1, max_daily_appointments: 10, advanced_scheduling: true, work_shifts_enabled: true, max_work_shifts: 2, telegram_notifications: true },
 };
 
-const defaults: Limits = { businesses: 1, services: 3, staff: 1, daily: 10 };
-const nextMonth = () => { const date = new Date(`${getKabulTodayISO()}T00:00:00Z`); date.setUTCDate(date.getUTCDate() + 30); return date.toISOString().slice(0, 10); };
-const limitsFor = (account: Account): Limits => ({
-  businesses: account.max_businesses ?? defaults.businesses,
-  services: account.max_services_per_business ?? defaults.services,
-  staff: account.max_staff_per_business ?? defaults.staff,
-  daily: account.max_daily_appointments_per_business ?? defaults.daily,
-});
+function limitsOf(plan: SubscriptionPlan): Limits { return { ...defaults[plan.code as PlanCode], ...(plan.limits as Record<string, unknown>) } as Limits; }
 
-function AccountLimits({ account, onSaved }: { account: Account; onSaved: (account: Account) => void }) {
-  const [limits, setLimits] = useState(() => limitsFor(account));
-  const [plan, setPlan] = useState<PlanCode>(account.plan_code === 'growth' ? 'growth' : account.plan_code === 'custom' ? 'custom' : 'free');
-  const [expiresOn, setExpiresOn] = useState(account.plan_expires_on || nextMonth());
-  const [workShiftsEnabled, setWorkShiftsEnabled] = useState(account.work_shifts_enabled === true);
-  const [unlimitedWorkShifts, setUnlimitedWorkShifts] = useState(account.max_work_shifts === null);
-  const [maxWorkShifts, setMaxWorkShifts] = useState(String(account.max_work_shifts ?? 2));
-  const [message, setMessage] = useState('');
-  const { runAction, isPending } = usePendingActions();
-  const pending = isPending(account.id);
-  const expired = Boolean(account.plan_expires_on && account.plan_expires_on < getKabulTodayISO());
-
-  function change(key: keyof Limits, raw: string) {
-    const value = Number(raw);
-    if (Number.isSafeInteger(value) && value >= 0 && value <= 1000000) setLimits(previous => ({ ...previous, [key]: value }));
-  }
-
-  async function save(event: FormEvent) {
-    event.preventDefault();
-    await runAction(account.id, async () => {
-      setMessage('');
-      if (plan !== 'free' && (!expiresOn || expiresOn < getKabulTodayISO())) { setMessage('تاریخ پایان پلن باید امروز یا بعد از امروز باشد.'); return; }
-      const selectedLimits = plan === 'custom' ? limits : defaults;
-      const selectedShiftEnabled = plan === 'growth' ? true : plan === 'custom' && workShiftsEnabled;
-      const selectedMaxWorkShifts = plan === 'growth' ? 2 : plan === 'custom' && selectedShiftEnabled ? (unlimitedWorkShifts ? null : Number(maxWorkShifts)) : 0;
-      if (selectedShiftEnabled && selectedMaxWorkShifts !== null && (!Number.isSafeInteger(selectedMaxWorkShifts) || selectedMaxWorkShifts < 0 || selectedMaxWorkShifts > 1000000)) { setMessage('حداکثر تعداد شیفت باید عددی بین صفر تا یک میلیون یا نامحدود باشد.'); return; }
-      const { error } = await supabase.rpc('set_user_plan', {
-        p_user: account.id,
-        p_plan: plan,
-        p_businesses: selectedLimits.businesses,
-        p_services: selectedLimits.services,
-        p_staff: selectedLimits.staff,
-        p_daily_appointments: selectedLimits.daily,
-        p_expires_on: plan === 'free' ? null : expiresOn,
-        p_work_shifts_enabled: selectedShiftEnabled,
-        p_max_work_shifts: selectedMaxWorkShifts,
-      });
-      if (error) {
-        setMessage(error.message.includes('PLAN_NOT_AUTHORIZED') ? 'فقط مدیر فعال سیستم می‌تواند این پلن را تغییر دهد.' : error.message.includes('INVALID_PLAN') ? 'پلن یا مقادیر معتبر نیستند.' : 'ذخیره انجام نشد؛ فایل جدید plan_feature_access.sql را در Supabase اجرا کنید.');
-        return;
-      }
-      setLimits(selectedLimits);
-      onSaved({ ...account, plan_code: plan, plan_expires_on: plan === 'free' ? null : expiresOn, max_businesses: selectedLimits.businesses, max_services_per_business: selectedLimits.services, max_staff_per_business: selectedLimits.staff, max_daily_appointments_per_business: selectedLimits.daily, work_shifts_enabled: selectedShiftEnabled, max_work_shifts: selectedMaxWorkShifts });
-      setMessage(plan === 'growth' ? 'پلن رشد فعال شد.' : plan === 'custom' ? 'پلن سفارشی فعال شد.' : 'پلن آغاز فعال و پلن رشد غیرفعال شد.');
-    });
-  }
-
-  const fields: Array<[keyof Limits, string]> = [['businesses', 'کسب‌وکار'], ['services', 'خدمت برای هر کسب‌وکار'], ['staff', 'کارمند برای هر کسب‌وکار'], ['daily', 'نوبت روزانه برای هر کسب‌وکار']];
-  return <form onSubmit={save} className="rounded-2xl border border-slate-300 bg-white p-5 text-slate-900">
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div><h2 className="font-bold">{account.full_name || 'کاربر بدون نام'}</h2><p className="mt-1 text-sm text-slate-600">{account.plan_code === 'growth' ? 'پلن رشد' : account.plan_code === 'custom' ? 'پلن سفارشی' : account.plan_code === 'free' ? 'پلن آغاز · رایگان' : 'تنظیمات قبلی'}{expired ? ' · منقضی‌شده' : ''}{account.is_active === false ? ' · حساب غیرفعال' : ''}</p>{account.plan_expires_on && <p className="mt-1 text-xs text-slate-500">پایان فعلی: {isoToAfghaniDate(account.plan_expires_on)}</p>}</div>
-      <Button type="submit" isLoading={pending}>{expired && account.plan_code === plan ? `تمدید پلن ${plan === 'growth' ? 'رشد' : 'سفارشی'}` : plan === 'growth' ? 'فعال‌کردن پلن رشد' : plan === 'custom' ? 'فعال‌کردن پلن سفارشی' : 'فعال‌کردن پلن آغاز'}</Button>
-    </div>
-    <fieldset disabled={pending} className="mt-5"><legend className="mb-2 text-sm font-bold">پلن حساب</legend><div className="grid gap-2 sm:grid-cols-3">
-      {([['free', 'آغاز · رایگان'], ['growth', 'رشد · ۳۰۰ افغانی'], ['custom', 'سفارشی · توافقی']] as const).map(([code, label]) => <label key={code} className={`cursor-pointer rounded-xl border p-3 text-sm font-semibold ${plan === code ? 'border-emerald-500 bg-emerald-50 text-emerald-900' : 'border-slate-300'}`}><input type="radio" name={`plan-${account.id}`} value={code} checked={plan === code} onChange={() => setPlan(code)} className="ml-2" />{label}</label>)}
-    </div></fieldset>
-    {plan !== 'free' && <label className="mt-4 block max-w-xs text-xs font-semibold text-slate-700">تاریخ پایان پلن<input aria-label="تاریخ پایان پلن" type="date" min={getKabulTodayISO()} required disabled={pending} value={expiresOn} onChange={event => setExpiresOn(event.target.value)} className="mt-2 block w-full rounded-xl border border-slate-300 bg-white p-3 text-base text-slate-900 disabled:opacity-60" /></label>}
-    {plan === 'custom' && <><div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      {fields.map(([key, label]) => <label key={key} className="text-xs font-semibold text-slate-700">{label}<input aria-label={label} type="number" min="0" max="1000000" step="1" required disabled={pending} value={limits[key]} onChange={event => change(key, event.target.value)} className="mt-2 block w-full rounded-xl border border-slate-300 bg-white p-3 text-base text-slate-900 disabled:opacity-60" /></label>)}
-    </div><div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4"><label className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={workShiftsEnabled} onChange={event => setWorkShiftsEnabled(event.target.checked)} />شیفت کاری فعال باشد</label>{workShiftsEnabled && <div className="mt-4 grid gap-3 sm:grid-cols-2"><label className="text-xs font-semibold text-slate-700">حداکثر تعداد شیفت<input aria-label="حداکثر تعداد شیفت کاری" type="number" min="0" max="1000000" step="1" required={!unlimitedWorkShifts} disabled={pending || unlimitedWorkShifts} value={maxWorkShifts} onChange={event => setMaxWorkShifts(event.target.value)} className="mt-2 block w-full rounded-xl border border-slate-300 bg-white p-3 text-base disabled:opacity-60" /></label><label className="flex items-center gap-2 self-end rounded-xl border border-slate-200 bg-white p-3 text-sm font-semibold"><input type="checkbox" checked={unlimitedWorkShifts} onChange={event => setUnlimitedWorkShifts(event.target.checked)} />نامحدود</label></div>}</div><p className="mt-3 text-xs leading-6 text-slate-500">صفر یعنی ایجاد مورد تازه در همان بخش متوقف شود. موارد موجود خودکار حذف یا غیرفعال نمی‌شوند.</p></>}
-    {message && <p role="status" className="mt-3 rounded-lg bg-slate-100 p-3 text-sm">{message}</p>}
+function PlanCard({ plan, onSaved }: { plan: SubscriptionPlan; onSaved: (plan: SubscriptionPlan) => void }) {
+  const code = plan.code as PlanCode; const [limits, setLimits] = useState(() => limitsOf(plan)); const [amount, setAmount] = useState(String(plan.default_amount ?? '')); const [saving, setSaving] = useState(false); const [message, setMessage] = useState('');
+  const number = (key: keyof Limits, raw: string) => { const value = Number(raw); if (Number.isSafeInteger(value) && value >= 0 && value <= 1000000) setLimits(previous => ({ ...previous, [key]: value })); };
+  async function save(event: FormEvent) { event.preventDefault(); setSaving(true); setMessage(''); const response = await fetch('/api/admin/subscriptions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'plan-template', code, amount: amount === '' ? null : Number(amount), currency: plan.currency, durationMonths: plan.duration_months, limits }) }); const body = await response.json(); if (!response.ok) setMessage(body.error || 'ذخیره انجام نشد.'); else { onSaved(body.plan); setMessage('قالب پلن ذخیره شد؛ اشتراک صاحبان حساب تغییر نکرد.'); } setSaving(false); }
+  return <form onSubmit={save} className="rounded-2xl border border-slate-800 bg-slate-900 p-5 text-white">
+    <h2 className="text-xl font-black">{labels[code].title}</h2><p className="mt-2 min-h-12 text-sm leading-6 text-slate-400">{labels[code].description}</p>
+    <div className="mt-4 grid gap-3 sm:grid-cols-2"><Input label="مبلغ پیش‌فرض" type="number" min="0" value={amount} onChange={event => setAmount(event.target.value)} /><Input label="حد کسب‌وکار" type="number" min="0" value={limits.max_businesses ?? ''} onChange={event => number('max_businesses', event.target.value)} /></div>
+    <div className="mt-3 grid gap-3 sm:grid-cols-3"><Input label="خدمت برای هر کسب‌وکار" type="number" min="0" value={limits.max_services} onChange={event => number('max_services', event.target.value)} /><Input label="کارمند برای هر کسب‌وکار" type="number" min="0" value={limits.max_staff} onChange={event => number('max_staff', event.target.value)} /><Input label="نوبت روزانه" type="number" min="0" value={limits.max_daily_appointments} onChange={event => number('max_daily_appointments', event.target.value)} /></div>
+    <div className="mt-4 space-y-3 rounded-xl bg-slate-950/50 p-4 text-sm"><label className="flex items-center gap-2"><input type="checkbox" checked={limits.advanced_scheduling} onChange={event => setLimits(previous => ({ ...previous, advanced_scheduling: event.target.checked }))} />تنظیمات پیشرفته فعال باشد</label><label className="flex items-center gap-2"><input type="checkbox" checked={limits.work_shifts_enabled} onChange={event => setLimits(previous => ({ ...previous, work_shifts_enabled: event.target.checked, max_work_shifts: event.target.checked ? previous.max_work_shifts : 0 }))} />شیفت کاری فعال باشد</label><Input label="حد شیفت برای هر کسب‌وکار" type="number" min="0" disabled={!limits.work_shifts_enabled} value={limits.max_work_shifts} onChange={event => number('max_work_shifts', event.target.value)} /><label className="flex items-center gap-2"><input type="checkbox" checked={limits.telegram_notifications} onChange={event => setLimits(previous => ({ ...previous, telegram_notifications: event.target.checked }))} />اطلاع‌رسانی تلگرام</label></div>
+    {message && <p role="status" className="mt-3 text-xs text-cyan-200">{message}</p>}<Button type="submit" className="mt-4" isLoading={saving}>ذخیره قالب {labels[code].title}</Button>
   </form>;
 }
 
 export default function PlansPage() {
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [ready, setReady] = useState(false);
-  const [message, setMessage] = useState('');
-  const [search, setSearch] = useState('');
-  useEffect(() => {
-    let disposed = false;
-    async function load() {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error('با حساب فهیم ادمین وارد شوید.');
-        const { data: admin, error: authError } = await supabase.from('profiles').select('role,is_active').eq('id', user.id).single();
-        if (authError || admin?.role !== 'superadmin' || admin.is_active === false) throw new Error('این بخش فقط برای مدیر فعال سیستم است.');
-        const { data, error } = await supabase.from('profiles').select('id,full_name,plan_code,plan_expires_on,is_active,max_businesses,max_services_per_business,max_staff_per_business,max_daily_appointments_per_business,work_shifts_enabled,max_work_shifts').eq('role', 'user').order('created_at', { ascending: false });
-        if (error) throw new Error(error.message.includes('max_services_per_business') ? 'ابتدا فایل جدید supabase/free_plan.sql را در دیتابیس اجرا کنید.' : 'دریافت حساب‌ها انجام نشد؛ صفحه را دوباره باز کنید.');
-        if (!disposed) { setAccounts(data || []); setReady(true); }
-      } catch (error) { if (!disposed) setMessage(error instanceof Error ? error.message : 'ارتباط برقرار نشد.'); }
-    }
-    void load();
-    return () => { disposed = true; };
-  }, []);
-
-  return <section dir="rtl" className="space-y-3">
-    <div><h1 className="text-2xl font-bold">مدیریت پلن مشتری‌ها</h1><p className="mt-3 leading-8">برای هر صاحب کسب‌وکار پلن آغاز، رشد یا سفارشی را انتخاب و دکمهٔ فعال‌سازی را بزنید. انتخاب «آغاز» پلن رشد را غیرفعال می‌کند.</p></div>
-    {/* <div className="grid grid-cols-2 gap-3 md:grid-cols-4">{['۱ کسب‌وکار', '۳ خدمت فعال', '۱ کارمند فعال', '۱۰ نوبت روزانه'].map(label => <div key={label} className="rounded-xl border border-slate-300 bg-white p-5 font-bold text-slate-900">{label}</div>)}</div> */}
-    {/* <p className="leading-8">سقف نوبت برای مجموع هر کسب‌وکار در هر تاریخ است. نوبت لغوشده ظرفیت را آزاد می‌کند؛ نوبت انجام‌شده شمرده می‌شود.</p> */}
-    {message && <p role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-slate-900">{message}</p>}
-    {!ready && !message && <p role="status">در حال دریافت حساب‌ها…</p>}
-    {ready && <><label className="block">جستجوی نام<input value={search} onChange={event => setSearch(event.target.value)} className="mt-2 block w-full rounded-xl border border-slate-300 bg-white p-3 text-slate-900" /></label><div className="space-y-4">{accounts.filter(account => (account.full_name || '').includes(search.trim())).map(account => <AccountLimits key={account.id} account={account} onSaved={saved => setAccounts(previous => previous.map(item => item.id === saved.id ? saved : item))} />)}</div>{accounts.length === 0 && <p>هنوز حسابی ثبت نشده است.</p>}</>}
-  </section>;
+  const [data, setData] = useState<Payload | null>(null); const [error, setError] = useState('');
+  const load = useCallback(async () => { const response = await fetch('/api/admin/subscriptions', { cache: 'no-store' }); const body = await response.json(); if (!response.ok) setError(body.error || 'دریافت قالب‌ها انجام نشد.'); else setData(body); }, []);
+  useEffect(() => { const timer = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(timer); }, [load]);
+  const plans = (data?.plans ?? []).filter(plan => ['free', 'growth', 'custom'].includes(plan.code));
+  return <section dir="rtl" className="space-y-5"><div><h1 className="text-2xl font-black text-white">مدیریت پلن‌ها</h1><p className="mt-2 text-sm leading-7 text-slate-400">تعریف امکانات و محدودیت‌های قالب پلن‌ها. اعمال واقعی پلن روی هر صاحب حساب فقط در بخش «اشتراک و پرداخت» انجام می‌شود.</p></div>{error && <p role="alert" className="rounded-xl bg-rose-500/10 p-4 text-rose-200">{error}</p>}{data?.setupRequired && <p role="alert" className="rounded-xl bg-amber-500/10 p-4 text-amber-100">ابتدا فایل supabase/manual_subscriptions.sql را اجرا کنید؛ ویرایش قالب‌ها تا آن زمان غیرفعال است.</p>}{!data && !error && <p className="text-slate-400">در حال دریافت قالب‌ها…</p>}<div className="grid gap-4 xl:grid-cols-3">{plans.map(plan => <PlanCard key={plan.code} plan={plan} onSaved={saved => setData(previous => previous ? { ...previous, plans: previous.plans.map(item => item.code === saved.code ? saved : item) } : previous)} />)}</div></section>;
 }
