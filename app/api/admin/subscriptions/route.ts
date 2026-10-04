@@ -51,11 +51,11 @@ export async function POST(request: Request) {
   const auth = await authorizedClient(); if ('error' in auth) return auth.error; const body = await request.json().catch(() => null) as Record<string, unknown> | null;
   if (!body || typeof body.action !== 'string') return NextResponse.json({ error: 'درخواست معتبر نیست.' }, { status: 400 });
   if (body.action === 'plan-template') {
-    const code = String(body.code || ''); const amount = body.amount === null ? null : Number(body.amount); const duration = body.durationMonths === null ? null : Number(body.durationMonths); const limits = body.limits;
-    if (!['free', 'growth', 'custom'].includes(code) || (amount !== null && (!Number.isFinite(amount) || amount < 0)) || !limits || typeof limits !== 'object') return NextResponse.json({ error: 'قالب پلن معتبر نیست.' }, { status: 400 });
+    const code = String(body.code || ''); const name = String(body.name || '').trim(); const amount = body.amount === null ? null : Number(body.amount); const duration = body.durationMonths === null ? null : Number(body.durationMonths); const limits = body.limits;
+    if (!['free', 'growth', 'custom'].includes(code) || !name || name.length > 80 || (amount !== null && (!Number.isFinite(amount) || amount < 0)) || !limits || typeof limits !== 'object') return NextResponse.json({ error: 'قالب پلن معتبر نیست.' }, { status: 400 });
     const values = Object.values(limits as Record<string, unknown>).filter(value => typeof value === 'number') as number[];
     if (values.some(value => !Number.isSafeInteger(value) || value < 0 || value > 1000000)) return NextResponse.json({ error: 'محدودیت‌های پلن معتبر نیستند.' }, { status: 400 });
-    const { data, error } = await auth.client.from('subscription_plan_catalog').update({ default_amount: amount, currency: String(body.currency || 'AFN').toUpperCase(), duration_months: duration, limits: limits as Json, updated_at: new Date().toISOString() }).eq('code', code).select('*').single();
+    const { data, error } = await auth.client.from('subscription_plan_catalog').update({ name, is_active: body.isActive !== false, default_amount: amount, currency: String(body.currency || 'AFN').toUpperCase(), duration_months: duration, limits: limits as Json, updated_at: new Date().toISOString() }).eq('code', code).select('*').single();
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
     return NextResponse.json({ success: true, plan: data });
   }
