@@ -10,9 +10,10 @@ export interface ModalProps {
   description?: string;
   children: React.ReactNode;
   className?: string;
+  overlayClassName?: string;
 }
 
-export function Modal({ isOpen, onClose, title, description, children, className }: ModalProps) {
+export function Modal({ isOpen, onClose, title, description, children, className, overlayClassName }: ModalProps) {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -30,7 +31,10 @@ export function Modal({ isOpen, onClose, title, description, children, className
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-150">
+    <div className={cn(
+      'fixed inset-0 z-50 flex items-center justify-center bg-slate-950/25 p-4 backdrop-blur-sm animate-in fade-in duration-150 sm:p-6',
+      overlayClassName
+    )}>
       <div
         className="fixed inset-0"
         onClick={onClose}

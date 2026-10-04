@@ -25,6 +25,26 @@ html, body {
   scroll-behavior: smooth;
 }
 
+/* Plan management keeps the dashboard typeface and leaves page context visible behind dialogs. */
+.plans-page,
+.plans-page button,
+.plans-page input,
+.plans-page select,
+.plans-page option,
+.plans-page textarea {
+  font-family: var(--font-vazirmatn), Tahoma, Arial, sans-serif;
+}
+
+.plans-page div[role="dialog"] > button[aria-label="بستن"] {
+  background-color: rgb(2 6 23 / 0.28);
+  backdrop-filter: blur(7px);
+}
+
+.plans-page div[role="dialog"] > aside {
+  background-color: rgb(248 250 252 / 0.96);
+  backdrop-filter: blur(18px);
+}
+
 /* Custom minimal scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
