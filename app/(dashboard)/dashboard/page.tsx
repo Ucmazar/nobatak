@@ -899,14 +899,14 @@ export default function DashboardPage() {
       <header className="workspace-header sticky top-0 z-30 text-white">
         <div className="mx-auto flex min-h-20 max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
           <Link href="/" className="flex items-center gap-3">
-            <Image src="/nobat-logo.png" width={184} height={100} sizes="92px" alt="نوبت" className="h-10 w-auto object-contain" priority />
+            <Image src="/nobat-logo.png" width={184} height={100} sizes="(max-width: 639px) 64px, 92px" alt="نوبت" className="h-8 w-auto object-contain sm:h-10" priority />
             <strong className="hidden text-xl sm:block">نوبت - {isoToAfghaniDate(selectedDate)}</strong>
           </Link>
           <div className="workspace-header-actions flex min-w-0 items-center justify-between gap-2">
-            {selectedBusiness && <span className="min-w-0 flex-1 truncate text-xs font-bold text-blue-50 sm:max-w-48">داشبورد {selectedBusiness.name}</span>}
-            <div ref={accountMenuRef} className="relative ms-auto min-w-0 max-w-[58%] shrink-0 sm:max-w-64">
-              <button type="button" aria-haspopup="menu" aria-expanded={accountMenuOpen} aria-label={`منوی پروفایل ${accountName}`} onClick={() => { setAccountMenuOpen(open => !open); setBusinessMenuOpen(false); }} className="flex min-h-11 w-full min-w-0 items-center gap-2 rounded-xl border border-white/30 bg-white/10 px-2.5 py-2 text-xs font-bold !text-white shadow-sm transition-colors hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300 sm:px-3">
-                <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-white/15 text-white ring-1 ring-white/20"><UserRound size={16} aria-hidden="true" /></span><span className="min-w-0 flex-1 truncate text-right">{accountName}</span><ChevronDown size={15} className={`shrink-0 text-blue-100 transition-transform ${accountMenuOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
+            {selectedBusiness && <span className="workspace-header-business-name min-w-0 truncate text-center text-[11px] font-bold text-blue-50 sm:max-w-48 sm:text-right sm:text-xs">داشبورد {selectedBusiness.name}</span>}
+            <div ref={accountMenuRef} className="workspace-profile-control relative ms-auto min-w-0 max-w-28 shrink-0 sm:max-w-64">
+              <button type="button" aria-haspopup="menu" aria-expanded={accountMenuOpen} aria-label={`منوی پروفایل ${accountName}`} onClick={() => { setAccountMenuOpen(open => !open); setBusinessMenuOpen(false); }} className="flex min-h-11 w-full min-w-0 items-center gap-1.5 rounded-xl border border-white/30 bg-white/10 px-2 py-2 text-xs font-bold !text-white shadow-sm transition-colors hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300 sm:gap-2 sm:px-3">
+                <span className="grid size-6 shrink-0 place-items-center rounded-lg bg-white/15 text-white ring-1 ring-white/20 sm:size-7"><UserRound size={15} aria-hidden="true" /></span><span className="min-w-0 flex-1 truncate text-right">{accountName}</span><ChevronDown size={14} className={`shrink-0 text-blue-100 transition-transform ${accountMenuOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
               </button>
               {accountMenuOpen && <div role="menu" aria-label="منوی پروفایل" className="absolute end-0 top-full z-50 mt-2 max-h-[calc(100vh-6rem)] w-[min(280px,calc(100vw-24px))] overflow-x-hidden overflow-y-auto rounded-2xl border border-slate-200 bg-white p-2 text-slate-900 shadow-2xl ring-1 ring-slate-950/5">
                 <div className="mb-1 min-w-0 rounded-xl bg-slate-50 px-3 py-3" role="presentation"><p className="truncate text-sm font-extrabold text-slate-950">{accountName}</p><p dir="ltr" className="mt-1 truncate text-right text-xs font-medium text-slate-600">{user?.email || 'ایمیل ثبت نشده'}</p></div>

@@ -31,3 +31,6 @@
 
 /* Keep the compact RTL profile control on one line at dashboard breakpoints. */
 @media(max-width:768px){.workspace-header-actions{flex-wrap:nowrap}}
+
+/* Mobile header: keep the brand and account control on one compact row. */
+@media(max-width:639px){.workspace-header>div{display:grid!important;grid-template-columns:auto minmax(0,1fr) auto;align-items:center!important;gap:8px}.workspace-header>div>a{grid-column:1;min-width:0}.workspace-header-actions{display:contents}.workspace-header-business-name{grid-column:2}.workspace-profile-control{grid-column:3}}
