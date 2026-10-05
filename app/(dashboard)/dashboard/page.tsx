@@ -56,6 +56,13 @@ function rememberBusiness(userId: string | undefined, businessId: string | null)
   } catch { /* Selection persistence is optional when storage is blocked. */ }
 }
 
+function formatDashboardAfghaniDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const kabulDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kabul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
+  return isoToAfghaniDate(kabulDate);
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const bootstrap = useDashboardBootstrap();
@@ -791,7 +798,8 @@ export default function DashboardPage() {
         if (!selectedBusiness) return;
         const srv = services.find(s => s.id === app.service_id) || app.service;
         const st = staffMembers.find(s => s.id === app.staff_id) || app.staff;
-        const aheadCount = queueAhead(appointments, app.appointment_date, app.staff_id, app.queue_number);
+        const waitingAppointments = appointments.filter(appointment => appointment.status === 'waiting');
+        const aheadCount = queueAhead(waitingAppointments, app.appointment_date, app.staff_id, app.queue_number);
 
         const { downloadTicketImage } = await import('@/lib/ticketImage');
         downloadTicketImage({
@@ -806,7 +814,7 @@ export default function DashboardPage() {
           serviceName: srv?.name || null,
           staffName: st?.name || null,
           peopleAhead: aheadCount,
-          estimatedWaitMinutes: estimatedWaitMinutes(appointments, app.appointment_date, app.staff_id, app.queue_number, waitClock),
+          estimatedWaitMinutes: estimatedWaitMinutes(waitingAppointments, app.appointment_date, app.staff_id, app.queue_number, waitClock),
         });
       } catch {
         setAlertMsg({ type: 'error', text: 'عملیات انجام نشد. لطفاً دوباره تلاش کنید.' });
@@ -909,7 +917,7 @@ export default function DashboardPage() {
                 <span className="grid size-6 shrink-0 place-items-center rounded-lg bg-white/15 text-white ring-1 ring-white/20 sm:size-7"><UserRound size={15} aria-hidden="true" /></span><span className="min-w-0 flex-1 truncate text-right">{accountName}</span><ChevronDown size={14} className={`shrink-0 text-blue-100 transition-transform ${accountMenuOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
               </button>
               {accountMenuOpen && <div role="menu" aria-label="منوی پروفایل" className="absolute end-0 top-full z-50 mt-2 max-h-[calc(100vh-6rem)] w-[min(280px,calc(100vw-24px))] overflow-x-hidden overflow-y-auto rounded-2xl border border-slate-200 bg-white p-2 text-slate-900 shadow-2xl ring-1 ring-slate-950/5">
-                <div className="mb-1 min-w-0 rounded-xl bg-slate-50 px-3 py-3" role="presentation"><p className="truncate text-sm font-extrabold text-slate-950">{accountName}</p><p dir="ltr" className="mt-1 truncate text-right text-xs font-medium text-slate-600">{user?.email || 'ایمیل ثبت نشده'}</p></div>
+                <div className="mb-1 min-w-0 rounded-xl bg-slate-50 px-3 py-3" role="presentation"><p className="truncate text-sm font-extrabold text-slate-950">{accountName}</p><p dir="ltr" className="mt-1 truncate text-right text-xs font-semibold text-slate-800">{user?.email || 'ایمیل ثبت نشده'}</p></div>
                 <button type="button" role="menuitem" aria-expanded={businessMenuOpen} onClick={() => setBusinessMenuOpen(open => !open)} className="flex min-h-11 w-full items-center justify-between rounded-xl px-3 py-2.5 text-right text-sm font-bold !text-slate-800 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-blue-500"><span className="flex min-w-0 items-center gap-2"><Building2 size={17} className="shrink-0 text-slate-600" /><span className="truncate">کسب‌وکارها</span></span><span className="shrink-0 text-slate-500" aria-hidden="true">‹</span></button>
                 {businessMenuOpen && <div className="mx-1 mb-2 rounded-xl border border-slate-200 bg-slate-50 p-1" role="group" aria-label="انتخاب کسب‌وکار">{businesses.map(business => <button type="button" key={business.id} disabled={pending.size > 0} onClick={() => { void handleSelectBusiness(business); setAccountMenuOpen(false); setBusinessMenuOpen(false); }} className="flex min-h-10 w-full items-center gap-2 rounded-lg px-3 py-2 text-right text-xs font-medium !text-slate-700 hover:bg-white disabled:opacity-50"><Check size={15} className={`shrink-0 ${selectedBusiness?.id === business.id ? 'text-blue-600' : 'invisible'}`} /><span className="min-w-0 flex-1 truncate">{business.name}</span>{business.is_active === false && <span className="shrink-0 text-[10px] font-bold text-amber-700">غیرفعال</span>}</button>)}<div className="my-1 border-t border-slate-200" /><button type="button" disabled={!canCreateBusiness} onClick={() => { setAccountMenuOpen(false); setBusinessMenuOpen(false); setIsBizModalOpen(true); }} className="flex min-h-10 w-full items-center gap-2 rounded-lg px-3 py-2 text-right text-xs font-bold !text-blue-700 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"><Plus size={15} className="shrink-0" />ایجاد کسب‌وکار جدید</button></div>}
                 <button type="button" role="menuitem" onClick={() => { setAccountMenuOpen(false); setAccountSettingsOpen(true); }} className="flex min-h-11 w-full items-center gap-2 rounded-xl px-3 py-2.5 text-right text-sm font-bold !text-slate-800 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-blue-500"><Settings size={17} className="shrink-0 text-slate-600" />تنظیمات حساب</button>
@@ -1599,8 +1607,7 @@ export default function DashboardPage() {
       <Modal isOpen={accountSettingsOpen} onClose={() => setAccountSettingsOpen(false)} title="تنظیمات حساب" description="مشخصات حساب واردشده و وضعیت اشتراک">
         <div className="space-y-5">
           <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><h3 className="font-bold text-slate-900">اطلاعات حساب</h3><dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2"><div><dt className="text-xs text-slate-500">نام کاربر</dt><dd className="mt-1 font-bold text-slate-900">{accountName}</dd></div><div><dt className="text-xs text-slate-500">ایمیل ورود</dt><dd dir="ltr" className="mt-1 truncate text-right font-medium text-slate-800">{user?.email || 'ثبت نشده'}</dd></div><div><dt className="text-xs text-slate-500">شماره تماس</dt><dd className="mt-1 font-medium text-slate-800">{profile?.phone || 'ثبت نشده'}</dd></div><div><dt className="text-xs text-slate-500">تعداد کسب‌وکار</dt><dd className="mt-1 font-medium text-slate-800">{businesses.length.toLocaleString('fa-AF')} از {effectivePlan.maxBusinesses === null ? 'نامحدود' : effectivePlan.maxBusinesses.toLocaleString('fa-AF')}</dd></div></dl></section>
-          <section className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4"><h3 className="font-bold text-slate-900">پلن و اشتراک</h3><dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2"><div><dt className="text-xs text-slate-500">پلن فعلی</dt><dd className="mt-1 font-bold text-blue-800">{planLabel}</dd></div><div><dt className="text-xs text-slate-500">وضعیت</dt><dd className="mt-1 font-bold text-slate-800">{effectivePlan.status === 'active' ? 'فعال' : effectivePlan.status === 'expired' ? 'منقضی' : effectivePlan.status === 'suspended' ? 'تعلیق' : 'لغو'}</dd></div>{effectivePlan.startedAt && <div><dt className="text-xs text-slate-500">تاریخ شروع</dt><dd className="mt-1 font-medium text-slate-800">{new Intl.DateTimeFormat('fa-AF', { dateStyle: 'medium', timeZone: 'Asia/Kabul' }).format(new Date(effectivePlan.startedAt))}</dd></div>}{effectivePlan.expiresAt && <div><dt className="text-xs text-slate-500">تاریخ پایان اعتبار</dt><dd className="mt-1 font-medium text-slate-800">{new Intl.DateTimeFormat('fa-AF', { dateStyle: 'medium', timeZone: 'Asia/Kabul' }).format(new Date(effectivePlan.expiresAt))}</dd></div>}</dl></section>
-          <div className="flex justify-end"><Button type="button" variant="outline" onClick={() => setAccountSettingsOpen(false)}>بستن</Button></div>
+          <section className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4"><h3 className="font-bold text-slate-900">پلن و اشتراک</h3><dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2"><div><dt className="text-xs text-slate-500">پلن فعلی</dt><dd className="mt-1 font-bold text-blue-800">{planLabel}</dd></div><div><dt className="text-xs text-slate-500">وضعیت</dt><dd className="mt-1 font-bold text-slate-800">{effectivePlan.status === 'active' ? 'فعال' : effectivePlan.status === 'expired' ? 'منقضی' : effectivePlan.status === 'suspended' ? 'تعلیق' : 'لغو'}</dd></div>{effectivePlan.startedAt && <div><dt className="text-xs text-slate-500">تاریخ شروع</dt><dd className="mt-1 font-medium text-slate-800">{formatDashboardAfghaniDate(effectivePlan.startedAt)}</dd></div>}{effectivePlan.expiresAt && <div><dt className="text-xs text-slate-500">تاریخ پایان اعتبار</dt><dd className="mt-1 font-medium text-slate-800">{formatDashboardAfghaniDate(effectivePlan.expiresAt)}</dd></div>}</dl></section>
         </div>
       </Modal>
 
