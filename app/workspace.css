@@ -28,3 +28,6 @@
 .booking-app,.booking-app *,.booking-app button,.booking-app input,.booking-app select,.booking-app option,.booking-app textarea,.booking-app table,.booking-app [class*="font-mono"]{font-family:var(--font-vazirmatn),Tahoma,Arial,sans-serif!important}.booking-app input::placeholder,.booking-app textarea::placeholder{font-family:var(--font-vazirmatn),Tahoma,Arial,sans-serif!important}.booking-app{font-kerning:normal;font-variant-ligatures:common-ligatures;text-rendering:optimizeLegibility}.booking-date-card{margin-inline:auto;width:100%}
 .workspace-row-actions .workspace-action-move{border-color:#d97706;background:#fff7ed;color:#b45309}
 .workspace-app .workspace-appointments-table thead tr:hover{background:transparent!important}
+
+/* Keep the compact RTL profile control on one line at dashboard breakpoints. */
+@media(max-width:768px){.workspace-header-actions{flex-wrap:nowrap}}
