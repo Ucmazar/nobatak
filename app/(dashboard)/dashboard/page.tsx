@@ -900,7 +900,7 @@ export default function DashboardPage() {
         <div className="mx-auto flex min-h-20 max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
           <Link href="/" className="flex items-center gap-3">
             <Image src="/nobat-logo.png" width={184} height={100} sizes="92px" alt="نوبت" className="h-10 w-auto object-contain" priority />
-            <strong className="text-sm sm:text-xl">نوبت - {isoToAfghaniDate(selectedDate)}</strong>
+            <strong className="hidden text-xl sm:block">نوبت - {isoToAfghaniDate(selectedDate)}</strong>
           </Link>
           <div className="workspace-header-actions flex min-w-0 items-center justify-between gap-2">
             {selectedBusiness && <span className="min-w-0 flex-1 truncate text-xs font-bold text-blue-50 sm:max-w-48">داشبورد {selectedBusiness.name}</span>}
